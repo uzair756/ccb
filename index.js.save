@@ -1,0 +1,164 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken'); // Import JWT
+const app = express();
+
+
+
+
+
+
+// Middleware to handle CORS and JSON
+app.use(cors({
+  origin: 'http://192.168.1.21:3000', // Frontend URL
+  credentials: true
+}));
+app.use(express.json());
+
+
+
+
+
+
+
+// MongoDB connection
+mongoose.connect('mongodb://127.0.0.1:27017/campusplay')
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log(err));
+
+
+
+
+
+
+// Define User Schema and Model
+const userSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String
+});
+
+
+
+
+const DSAUser = mongoose.model('DSAUser', userSchema);
+
+
+
+
+// JWT Secret Key
+const JWT_SECRET = '4gM8XkFz9pVnR2hQ7wLrY5aC0uJbH3eZ'; // strong, unique key
+// Middleware to verify JWT
+const authenticateJWT = (req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1]; // Extract token from Authorization header
+  if (token) {
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (err) return res.sendStatus(403); // Forbidden
+      req.user = user;
+      next();
+    });
+  } else {
+    res.sendStatus(401); // Unauthorized
+  }
+};
+
+
+
+// Handle user registration
+app.post('/dsasignup', async (req, res) => {
+    try {
+      // Check if the email already exists
+      const existingUser = await DSAUser.findOne({ email: req.body.email });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already exists' });
+      }
+  
+      // Hash the password before saving
+      const hashedPassword = await bcrypt.hash(req.body.password, 10);
+      const user = new DSAUser({ ...req.body, password: hashedPassword });
+      const result = await user.save();
+      res.status(201).send(result); 
+    } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ error: 'Error creating account' }); // Return a specific error message
+    }
+  });
+  
+
+
+// Handle user update
+// app.put('/profile', authenticateJWT, async (req, res) => {
+//   const { name, email, age, password } = req.body;
+//   try {
+//     const user = await User.findById(req.user.id);
+//     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+//     // Update fields
+//     user.name = name || user.name;
+//     user.email = email || user.email;
+//     user.age = age || user.age;
+
+//     // Update password if provided
+//     if (password) {
+//       user.password = await bcrypt.hash(password, 10);
+//     }
+
+//     await user.save();
+//     res.json({ success: true, message: 'User details updated successfully' });
+//   } catch (error) {
+//     console.error('Error:', error);
+//     res.status(500).json({ success: false, message: 'Error updating user details' });
+//   }
+// });
+
+
+
+
+
+// Handle user login
+app.post('/dsalogin', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (email && password) {
+    const user = await DSAUser.findOne({ email });
+    if (user && await bcrypt.compare(password, user.password)) {
+      // Generate JWT token
+      const token = jwt.sign({ id: user._id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+      res.json({ success: true, message: 'Logged in successfully', token });
+    } else {
+      res.json({ success: false, message: 'Invalid credentials' });
+    }
+  } else {
+    res.json({ success: false, message: 'Please provide email and password' });
+  }
+});
+
+
+
+
+
+
+
+
+
+// Handle profile request
+app.get('/dsaprofile', authenticateJWT, (req, res) => {
+  // req.user will be populated by authenticateJWT middleware
+  res.json({
+    success: true,
+    user: req.user
+  });
+});
+
+
+
+
+
+
+
+// Start the server
+app.listen(3002, () => {
+  console.log('Server running on port 3002');
+});
