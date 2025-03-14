@@ -10,6 +10,11 @@ const studentrepRoutes = require('./routes/studentrepRoutes')
 const captainRoutes = require('./routes/captainRoutes')
 const feedscreen = require('./routes/feedscreen')
 const refRoutes = require('./routes/refRoutes')
+const footballRoutes = require('./routes/footballRoutes')
+const cricketRoutes = require('./routes/cricketRoutes')
+const futsalRoutes = require('./routes/futsalRoutes')
+const basketballRoutes = require('./routes/basketballRoutes')
+
 
 
 const app = express();
@@ -34,6 +39,10 @@ app.use('/', studentrepRoutes);
 app.use('/', captainRoutes);
 app.use('/', feedscreen);
 app.use('/', refRoutes);
+app.use('/', footballRoutes);
+app.use('/', cricketRoutes);
+app.use('/', futsalRoutes);
+app.use('/', basketballRoutes);
 
 // Start the server
 app.listen(3002, () => {

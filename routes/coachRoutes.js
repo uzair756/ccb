@@ -466,8 +466,11 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
 
           if (team1 && team2) {
             // Fetch nominations from playerNominationSchema
-            const team1Nominations = await PlayerNominationForm.findOne({ department: team1 });
-            const team2Nominations = await PlayerNominationForm.findOne({ department: team2 });
+            // const team1Nominations = await PlayerNominationForm.findOne({ department: team1 });
+            // const team2Nominations = await PlayerNominationForm.findOne({ department: team2 });
+            const team1Nominations = await PlayerNominationForm.findOne({ department: team1, sport });
+            const team2Nominations = await PlayerNominationForm.findOne({ department: team2, sport });
+
 
             schedules.push({
               pool: poolIndex === 0 ? 'Pool A' : 'Pool B',
@@ -487,16 +490,26 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
 
     // If 7 teams, create additional play-off schedule
     if (validTeams.length === 7) {
+      // Fetch nominations for play-off teams
+      const playOffTeam1 = validTeams[5];
+      const playOffTeam2 = validTeams[6];
+    
+      const playOffTeam1Nominations = await PlayerNominationForm.findOne({ department: playOffTeam1, sport });
+      const playOffTeam2Nominations = await PlayerNominationForm.findOne({ department: playOffTeam2, sport });
+    
       schedules.unshift({
         pool: 'play-off',
-        team1: validTeams[5],
-        team2: validTeams[6],
+        team1: playOffTeam1,
+        team2: playOffTeam2,
         sport,
         year: currentYear.toString(),
         result: 'TBD',
         status: 'upcoming',
+        nominationsT1: playOffTeam1Nominations ? playOffTeam1Nominations.nominations : [],
+        nominationsT2: playOffTeam2Nominations ? playOffTeam2Nominations.nominations : [],
       });
     }
+    
 
     // Save schedules in the appropriate collection
     const sportScheduleModel = createScheduleModel(sport);

@@ -57,6 +57,8 @@ const playerNominationSchema = new mongoose.Schema({
   department: { type: String, required: true },
   nominations: [
     {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
       name: { type: String, required: true },
       cnic: { type: String, required: true },
       section: { type: String, required: true },
@@ -155,19 +157,47 @@ const getScheduleSchema = (sport) => {
       scoreT2: { type: Number, default: 0 },
       nominationsT1: [
         {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
           name: { type: String, required: true },
           cnic: { type: String, required: true },
           section: { type: String, required: true },
-          goalsscored: { type: String, default: 0},
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          goalsscored: { type: Number, default: 0 }
           
         }
       ],
       nominationsT2: [
         {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
           name: { type: String, required: true },
           cnic: { type: String, required: true },
           section: { type: String, required: true },
-          goalsscored: { type: String, default: 0},
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          goalsscored: { type: Number, default: 0 }
+          
+        }
+      ],
+      penaltiesT1: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          penaltyscored: { type: Number, default: 0 }
+          
+        }
+      ],
+      penaltiesT2: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          penaltyscored: { type: Number, default: 0 }
           
         }
       ],
@@ -175,26 +205,139 @@ const getScheduleSchema = (sport) => {
   } else if (sport === "Cricket") {
     return new mongoose.Schema({
       ...baseSchema,
+      tosswin: { type: String, default: null }, // Stores team name
+      tosswindecision: { type: String, default: null }, // Bat or Bowl
+      tossloose: { type: String, default: null }, // Stores team name
+      tossloosedecision: { type: String, default: null }, // Bat or Bowl
+      FirstInningBattingTeam: { type: String, default: null }, // Stores team name
+      FirstInningBowlingTeam: { type: String, default: null }, // Bat or Bowl
+      SecondInningBattingTeam: { type: String, default: null }, // Stores team name
+      SecondInningBowlingTeam: { type: String, default: null }, // Bat or Bowl
+      inning: { type:Number, default:0},
       scoreT1: { type: Number, default: 0 },
       scoreT2: { type: Number, default: 0 },
       T1wickets: { type: Number, default: 0 },
       T2wickets: { type: Number, default: 0 },
-      overs: { type: Number, default: 0 },
+      // Separate Overs Tracking for Each Inning
+    oversInning1: { type: Number, default: 0.0 },
+    oversInning2: { type: Number, default: 0.0 },
+    // Overall match runs breakdown per innings
+    runsInning1: [{ type: String }], // Stores runs scored in 1st inning (each ball)
+    runsInning2: [{ type: String }], // Stores runs scored in 2nd inning (each ball)
+      nominationsT1: [
+        {
+            shirtNo: { type: String, required: true },
+            regNo: { type: String, required: true },
+            name: { type: String, required: true },
+            cnic: { type: String, required: true },
+            section: { type: String, required: true },
+            playingStatus: { type: String, enum: ["Playing", "Reserved", "ActiveBatsman","ActiveBowler","Out"], default: "Reserved" },
+            runsScored: { type: Number, default: 0 }, // Total runs scored
+            ballsFaced: [{ type: Number }], // Runs per ball faced
+            ballsBowled: [{ type: String }], // Runs conceded per ball bowled
+            wicketsTaken: { type: Number, default: 0 } // Total wickets taken
+        }
+    ],
+    nominationsT2: [
+        {
+            shirtNo: { type: String, required: true },
+            regNo: { type: String, required: true },
+            name: { type: String, required: true },
+            cnic: { type: String, required: true },
+            section: { type: String, required: true },
+            playingStatus: { type: String, enum: ["Playing", "Reserved", "ActiveBatsman","ActiveBowler","Out"], default: "Reserved" },
+            runsScored: { type: Number, default: 0 },
+            ballsFaced: [{ type: Number }],
+            ballsBowled: [{ type: String }],
+            wicketsTaken: { type: Number, default: 0 }
+        }
+    ]
+
     });
-  } else if (sport === "Tennis") {
+  } else if (sport === "Basketball") {
     return new mongoose.Schema({
       ...baseSchema,
-      setsT1: { type: Number, default: 0 },
-      setsT2: { type: Number, default: 0 },
+      quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 4)
+      quarterWinners: { type: [String], default: ["", "", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+      scoreT1: { type: [Number], default: [0, 0, 0, 0] }, // Stores points for each quarter
+      scoreT2: { type: [Number], default: [0, 0, 0, 0] }, // Stores points for each quarter
+      nominationsT1: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          pointsByQuarter: { type: [Number], default: [0, 0, 0, 0] }, // Store per-quarter player score
+        }
+      ],
+      nominationsT2: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          pointsByQuarter: { type: [Number], default: [0, 0, 0, 0] }, // Store per-quarter player score
+        }
+      ]
     });
-  } else if (sport === "Futsal") {
+} else if (sport === "Futsal") {
     return new mongoose.Schema({
       ...baseSchema,
+      half: { type:Number, default:0},
       scoreT1: { type: Number, default: 0 },
       scoreT2: { type: Number, default: 0 },
-      duration: { type: Number, default: 40 }, // Default 40 minutes
+      nominationsT1: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          goalsscored: { type: Number, default: 0 }
+          
+        }
+      ],
+      nominationsT2: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+          goalsscored: { type: Number, default: 0 }
+          
+        }
+      ],
+      penaltiesT1: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          penaltyscored: { type: Number, default: 0 }
+          
+        }
+      ],
+      penaltiesT2: [
+        {
+          shirtNo: { type: String, required: true },
+          regNo: { type: String, required: true },
+          name: { type: String, required: true },
+          cnic: { type: String, required: true },
+          section: { type: String, required: true },
+          penaltyscored: { type: Number, default: 0 }
+          
+        }
+      ],
     });
-  }
+  };
 
   return new mongoose.Schema(baseSchema);
 };
