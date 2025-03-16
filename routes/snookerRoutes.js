@@ -9,7 +9,7 @@ const config = require('../config'); // Include JWT secret configuration
 const router = express.Router();
 
 
-router.post('/startmatchbasketball', authenticateJWT, async (req, res) => {
+router.post('/startmatchsnooker', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -47,7 +47,7 @@ router.post('/startmatchbasketball', authenticateJWT, async (req, res) => {
 
 
 
-router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
+router.post('/stopmatchsnooker', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
     const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
 
@@ -147,7 +147,7 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
 
 
 
-  router.post('/updateGoalbasketball', authenticateJWT, async (req, res) => {
+  router.post('/updateGoalsnooker', authenticateJWT, async (req, res) => {
     try {
         const { matchId, playerId, team, value } = req.body;
         const sportCategory = req.user.sportscategory;
@@ -211,7 +211,7 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
   
 
 
-router.post('/updateHalfbasketball', authenticateJWT, async (req, res) => {
+router.post('/updateHalfsnooker', authenticateJWT, async (req, res) => {
     const { matchId, quarter } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -275,7 +275,7 @@ router.post('/updateHalfbasketball', authenticateJWT, async (req, res) => {
 });
 
 
-router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
+router.post('/updateHalf4thsnooker', authenticateJWT, async (req, res) => {
     const { matchId, quarter } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -338,7 +338,7 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
 
   
   
-  router.post('/swapPlayersbasketball', authenticateJWT, async (req, res) => {
+  router.post('/swapPlayerssnooker', authenticateJWT, async (req, res) => {
     try {
       const { matchId, reservedPlayerId, playingPlayerId } = req.body;
       const ScheduleModel = createScheduleModel(req.user.sportscategory);
@@ -371,7 +371,7 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
   
 
 
-router.post('/updatePlayerStatusbasketball', authenticateJWT, async (req, res) => {
+router.post('/updatePlayerStatussnooker', authenticateJWT, async (req, res) => {
     try {
         const { matchId, selectedPlayers } = req.body;
         const sportCategory = req.user.sportscategory;

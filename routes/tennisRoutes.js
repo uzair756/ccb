@@ -9,7 +9,7 @@ const config = require('../config'); // Include JWT secret configuration
 const router = express.Router();
 
 
-router.post('/startmatchbasketball', authenticateJWT, async (req, res) => {
+router.post('/startmatchtennis', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -47,7 +47,7 @@ router.post('/startmatchbasketball', authenticateJWT, async (req, res) => {
 
 
 
-router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
+router.post('/stopmatchtennis', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
     const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
 
@@ -71,7 +71,7 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
         match.status = 'recent';
 
         // **Determine the match winner based on quarterWinners array**
-        const quarterWinners = match.quarterWinners || [];
+        const quarterWinners = match.quarterWinners || []; // Ensure array exists
         const winnerCounts = {};
 
         // Count occurrences of each team in quarterWinners
@@ -81,29 +81,27 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
             }
         });
 
-        // Find the team with the most wins
         let winningTeam = null;
-        let maxWins = 0;
 
-        for (const [team, count] of Object.entries(winnerCounts)) {
-            if (count > maxWins) {
-                maxWins = count;
-                winningTeam = team;
-            }
+        // ✅ If a team won 2 out of 3 quarters → They win
+        if (winnerCounts[match.team1] === 2) {
+            winningTeam = match.team1;
+        } else if (winnerCounts[match.team2] === 2) {
+            winningTeam = match.team2;
+        } 
+        // ✅ If each team won 1 quarter & the last was a tie → Draw
+        else if (winnerCounts[match.team1] === 1 && winnerCounts[match.team2] === 1 && quarterWinners.length === 3) {
+            winningTeam = 'Draw';
+        } 
+        // ✅ Default case: No clear winner, mark as Draw
+        else {
+            winningTeam = 'Draw';
         }
 
-        // If no team has more wins, it's a draw
-        if (maxWins === 2 && Object.keys(winnerCounts).length > 1) {
-            match.result = 'Draw';
-        } else {
-            match.result = winningTeam || 'Draw'; // Assign winner or draw
-        }
-
-        // Save updated match
-        await match.save();
+        match.result = winningTeam;
 
         // **Handle play-off winner replacements and nomination updates**
-        if (match.pool === 'play-off' && winningTeam) {
+        if (match.pool === 'play-off' && winningTeam !== 'Draw') {
             console.log("Play-off match detected. Updating TBD entries with nominations...");
 
             // Fetch nominations of the winning team
@@ -138,7 +136,9 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
             console.log("TBD & Nominations Update Result:", updateResult);
         }
 
+        await match.save();
         res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
+
     } catch (error) {
         console.error("Error in /stopmatch:", error);
         res.status(500).json({ success: false, message: 'Error stopping the match', error });
@@ -147,12 +147,12 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
 
 
 
-  router.post('/updateGoalbasketball', authenticateJWT, async (req, res) => {
+router.post('/updateGoaltennis', authenticateJWT, async (req, res) => {
     try {
-        const { matchId, playerId, team, value } = req.body;
+        const { matchId, playerId, team } = req.body;
         const sportCategory = req.user.sportscategory;
 
-        if (!matchId || !playerId || !team || !sportCategory || value == null) {
+        if (!matchId || !playerId || !team || !sportCategory) {
             return res.status(400).json({ success: false, message: "Invalid request data." });
         }
 
@@ -177,19 +177,19 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
             updatedPlayer = match.nominationsT1.find(player => player._id.toString() === playerId);
             if (updatedPlayer) {
                 updatedPlayer.pointsByQuarter[quarterIndex] = 
-                    (updatedPlayer.pointsByQuarter[quarterIndex] || 0) + Number(value); // Ensure Number type
+                    (updatedPlayer.pointsByQuarter[quarterIndex] || 0) + 1; // Increment by 1
 
                 match.scoreT1[quarterIndex] = 
-                    (match.scoreT1[quarterIndex] || 0) + Number(value);
+                    (match.scoreT1[quarterIndex] || 0) + 1; // Increment team score by 1
             }
         } else if (team === "team2") {
             updatedPlayer = match.nominationsT2.find(player => player._id.toString() === playerId);
             if (updatedPlayer) {
                 updatedPlayer.pointsByQuarter[quarterIndex] = 
-                    (updatedPlayer.pointsByQuarter[quarterIndex] || 0) + Number(value);
+                    (updatedPlayer.pointsByQuarter[quarterIndex] || 0) + 1;
 
                 match.scoreT2[quarterIndex] = 
-                    (match.scoreT2[quarterIndex] || 0) + Number(value);
+                    (match.scoreT2[quarterIndex] || 0) + 1;
             }
         }
 
@@ -198,20 +198,21 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
         }
 
         await match.save();
-        res.json({ success: true, message: "Goal updated successfully!" });
+        res.json({ success: true, message: "Point updated successfully!" });
 
     } catch (error) {
-        console.error("Error updating goal:", error);
+        console.error("Error updating point:", error);
         res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
 
 
 
+
   
 
 
-router.post('/updateHalfbasketball', authenticateJWT, async (req, res) => {
+router.post('/updateHalftennis', authenticateJWT, async (req, res) => {
     const { matchId, quarter } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -230,13 +231,13 @@ router.post('/updateHalfbasketball', authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Match not found.' });
         }
 
-        if (match.quarter >= 4) { 
+        if (match.quarter >= 3) { 
             return res.status(400).json({ success: false, message: 'Match has already completed all quarters.' });
         }
 
         // Ensure quarterWinners exists and has correct length
-        if (!match.quarterWinners || match.quarterWinners.length < 4) {
-            match.quarterWinners = ["", "", "", ""];
+        if (!match.quarterWinners || match.quarterWinners.length < 3) {
+            match.quarterWinners = ["", "", ""];
         }
 
         // **Use current quarter (not next) for fetching scores**
@@ -275,7 +276,7 @@ router.post('/updateHalfbasketball', authenticateJWT, async (req, res) => {
 });
 
 
-router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
+router.post('/updateHalf3rdtennis', authenticateJWT, async (req, res) => {
     const { matchId, quarter } = req.body;
     const sportCategory = req.user.sportscategory;
 
@@ -294,18 +295,18 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Match not found.' });
         }
 
-        if (match.quarter !== 4) { 
+        if (match.quarter !== 3) { 
             return res.status(400).json({ success: false, message: 'Only Quarter 4 can be ended with this route.' });
         }
 
         // Ensure quarterWinners exists and has correct length
-        if (!match.quarterWinners || match.quarterWinners.length < 4) {
-            match.quarterWinners = ["", "", "", ""];
+        if (!match.quarterWinners || match.quarterWinners.length < 3) {
+            match.quarterWinners = ["", "", ""];
         }
 
         // **Fetch Quarter 4's scores** (index 3 for 0-based array)
-        const team1Score = match.scoreT1[3]; 
-        const team2Score = match.scoreT2[3]; 
+        const team1Score = match.scoreT1[2]; 
+        const team2Score = match.scoreT2[2]; 
 
         let winner = "";
         if (team1Score > team2Score) {
@@ -316,14 +317,14 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
             winner = "Draw";
         }
 
-        console.log(`Quarter: 4, Storing winner at index: 3`);
-        match.quarterWinners[3] = winner; // Store winner for Quarter 4
+        console.log(`Quarter: 3, Storing winner at index: 2`);
+        match.quarterWinners[2] = winner; // Store winner for Quarter 4
 
         // **Reset quarter to 0 after match completion**
         match.quarter = 0; 
         await match.save();
 
-        res.json({ success: true, message: `Quarter 4 ended. Winner: ${winner}`, match });
+        res.json({ success: true, message: `Quarter 3 ended. Winner: ${winner}`, match });
     } catch (error) {
         console.error("Error updating quarter:", error);
         res.status(500).json({ success: false, message: 'Server error while updating the quarter.' });
@@ -338,7 +339,7 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
 
   
   
-  router.post('/swapPlayersbasketball', authenticateJWT, async (req, res) => {
+  router.post('/swapPlayerstennis', authenticateJWT, async (req, res) => {
     try {
       const { matchId, reservedPlayerId, playingPlayerId } = req.body;
       const ScheduleModel = createScheduleModel(req.user.sportscategory);
@@ -368,47 +369,7 @@ router.post('/updateHalf4thbasketball', authenticateJWT, async (req, res) => {
     }
   });
   
-  
 
-
-router.post('/updatePlayerStatusbasketball', authenticateJWT, async (req, res) => {
-    try {
-        const { matchId, selectedPlayers } = req.body;
-        const sportCategory = req.user.sportscategory;
-
-        if (!matchId || !selectedPlayers || selectedPlayers.length === 0) {
-            return res.status(400).json({ success: false, message: "Match ID and selected players are required." });
-        }
-
-        const ScheduleModel = createScheduleModel(sportCategory);
-        if (!ScheduleModel) {
-            return res.status(400).json({ success: false, message: "Invalid sport category." });
-        }
-
-        const match = await ScheduleModel.findById(matchId);
-        if (!match) {
-            return res.status(404).json({ success: false, message: "Match not found." });
-        }
-
-        match.nominationsT1.forEach(player => {updateHalf4thbasketball
-            if (selectedPlayers.includes(player._id.toString())) {
-                player.playingStatus = "Playing";
-            }
-        });
-
-        match.nominationsT2.forEach(player => {
-            if (selectedPlayers.includes(player._id.toString())) {
-                player.playingStatus = "Playing";
-            }
-        });
-
-        await match.save();
-        res.json({ success: true, message: "Players updated to Playing." });
-
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Server error while updating players." });
-    }
-});
 
 
 

@@ -284,7 +284,287 @@ const getScheduleSchema = (sport) => {
         }
       ]
     });
-} else if (sport === "Futsal") {
+}
+else if (sport === "Snooker") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 4)
+    quarterWinners: { type: [String], default: ["", "", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+}
+else if (sport === "Volleyball") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Badminton (M)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Badminton (F)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Tug of War (M)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Tug of War (F)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Tennis") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+} 
+else if (sport === "Table Tennis (M)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+}
+else if (sport === "Table Tennis (F)") {
+  return new mongoose.Schema({
+    ...baseSchema,
+    quarter: { type: Number, default: 0 }, // Tracks the current quarter (1 to 3)
+    quarterWinners: { type: [String], default: ["", "", ""] }, // Stores winning team per quarter ("T1", "T2", "Tie")
+    scoreT1: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    scoreT2: { type: [Number], default: [0, 0, 0] }, // Stores points for each quarter
+    nominationsT1: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ],
+    nominationsT2: [
+      {
+        shirtNo: { type: String, required: true },
+        regNo: { type: String, required: true },
+        name: { type: String, required: true },
+        cnic: { type: String, required: true },
+        section: { type: String, required: true },
+        playingStatus: { type: String, enum: ["Playing", "Reserved"], default: "Reserved" },
+        pointsByQuarter: { type: [Number], default: [0, 0, 0] }, // Store per-quarter player score
+      }
+    ]
+  });
+}
+else if (sport === "Futsal") {
     return new mongoose.Schema({
       ...baseSchema,
       half: { type:Number, default:0},

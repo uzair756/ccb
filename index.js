@@ -14,6 +14,13 @@ const footballRoutes = require('./routes/footballRoutes')
 const cricketRoutes = require('./routes/cricketRoutes')
 const futsalRoutes = require('./routes/futsalRoutes')
 const basketballRoutes = require('./routes/basketballRoutes')
+const volleyballRoutes = require('./routes/volleyballRoutes')
+const tennisRoutes = require('./routes/tennisRoutes')
+const tabletennisRoutes = require('./routes/tabletennisRoutes')
+const badmintonRoutes = require('./routes/badmintonRoutes')
+const tugofwarRoutes = require('./routes/tugofwarRoutes')
+const snookerRoutes = require('./routes/snookerRoutes')
+
 
 
 
@@ -43,6 +50,12 @@ app.use('/', footballRoutes);
 app.use('/', cricketRoutes);
 app.use('/', futsalRoutes);
 app.use('/', basketballRoutes);
+app.use('/', volleyballRoutes);
+app.use('/', tennisRoutes);
+app.use('/', tabletennisRoutes);
+app.use('/', badmintonRoutes);
+app.use('/', tugofwarRoutes);
+app.use('/', snookerRoutes);
 
 // Start the server
 app.listen(3002, () => {
