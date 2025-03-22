@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {createScheduleModel,PlayerNominationForm} = require('../models'); // Ensure the RefUser schema is defined in your models
+const {createScheduleModel,PlayerNominationForm, BestCricketer} = require('../models'); // Ensure the RefUser schema is defined in your models
 const authenticateJWT = require('../middleware');
 const config = require('../config'); // Include JWT secret configuration
 
@@ -437,6 +437,117 @@ router.post('/swapPlayerscricket', authenticateJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "Internal server error." });
     }
 });
+router.post('/handlealloutinning1', authenticateJWT, async (req, res) => {
+    try {
+        const { matchId, outgoingBatsmanId } = req.body;
+        const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+        if (!matchId || !outgoingBatsmanId || !ScheduleModel) {
+            return res.status(400).json({ success: false, message: "Invalid data." });
+        }
+
+        const match = await ScheduleModel.findById(matchId);
+        if (!match) {
+            return res.status(404).json({ success: false, message: "Match not found." });
+        }
+
+        const updateStatus = (players, id, status) => {
+            const player = players.find(p => p._id.equals(id));
+            if (player) player.playingStatus = status;
+        };
+
+        const updateBowlerStats = (players) => {
+            const activeBowler = players.find(p => p.playingStatus === "ActiveBowler");
+            if (activeBowler) {
+                activeBowler.wicketsTaken = (activeBowler.wicketsTaken || 0) + 1;
+                activeBowler.ballsBowled.push("W");
+            }
+        };
+
+        const updateOvers = (currentOvers) => {
+            let [whole, decimal] = currentOvers.toString().split('.').map(Number);
+            decimal = decimal || 0;
+
+            if (decimal === 5) {
+                whole += 1;
+                decimal = 0;
+            } else {
+                decimal += 1;
+            }
+
+            return parseFloat(`${whole}.${decimal}`);
+        };
+
+        const updateInnings = () => {
+            if (match.inning === 1) {
+                match.runsInning1.push("W");
+                match.oversInning1 = updateOvers(match.oversInning1);
+            } else if (match.inning === 2) {
+                match.runsInning2.push("W");
+                match.oversInning2 = updateOvers(match.oversInning2);
+            }
+        };
+
+        let allOut = false; // Track if the team is all out
+
+        if (match.FirstInningBattingTeam.toString().trim() === match.team1.toString().trim()) {
+            updateStatus(match.nominationsT1, outgoingBatsmanId, "Out");
+
+            match.T1wickets += 1;
+            updateBowlerStats(match.nominationsT2);
+            updateInnings();
+
+            if (match.T1wickets >= 10) allOut = true; // Check if all 10 wickets are lost
+
+        } else if (match.FirstInningBattingTeam.toString().trim() === match.team2.toString().trim()) {
+            updateStatus(match.nominationsT2, outgoingBatsmanId, "Out");
+
+            match.T2wickets += 1;
+            updateBowlerStats(match.nominationsT1);
+            updateInnings();
+
+            if (match.T2wickets >= 10) allOut = true; // Check if all 10 wickets are lost
+        } else {
+            return res.status(400).json({ success: false, message: "Invalid FirstInningBattingTeam value." });
+        }
+
+        // If all-out occurs in first innings, increment to inning 2
+        if (match.inning === 1 && allOut) {
+            match.inning += 1;
+            console.log("First inning over! Inning incremented to:", match.inning);
+            // Update playingStatus inside nominationsT1 and nominationsT2
+            match.nominationsT1.forEach(player => {
+            if (player.playingStatus === "ActiveBatsman" || player.playingStatus === "ActiveBowler" || player.playingStatus === "Out" ) {
+                player.playingStatus = "Playing";
+            }
+        });
+        
+            match.nominationsT2.forEach(player => {
+            if (player.playingStatus === "ActiveBatsman" || player.playingStatus === "ActiveBowler" || player.playingStatus === "Out") {
+                player.playingStatus = "Playing";
+            }
+        });
+        }
+
+
+        await match.save();
+
+        res.json({ 
+            success: true, 
+            message: "Players swapped, wicket updated, and innings data recorded successfully!", 
+            T1wickets: match.T1wickets, 
+            T2wickets: match.T2wickets,
+            oversInning1: match.oversInning1,
+            oversInning2: match.oversInning2,
+            inning: match.inning  // Return updated inning value
+        });
+
+    } catch (error) {
+        console.error("Error in handlealloutinning1:", error);
+        res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
 
 
 router.post('/swapPlayerscricket2ndInning', authenticateJWT, async (req, res) => {
@@ -697,52 +808,330 @@ router.post('/startmatchcricket', authenticateJWT, async (req, res) => {
 
 
 
+router.post('/handlealloutinning2', authenticateJWT, async (req, res) => {
+    try {
+        const { matchId, outgoingBatsmanId } = req.body;
+        const sportCategory = req.user.sportscategory;
+        const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+        if (!matchId || !outgoingBatsmanId || !ScheduleModel) {
+            return res.status(400).json({ success: false, message: "Invalid data." });
+        }
+
+        const match = await ScheduleModel.findById(matchId);
+        if (!match) {
+            return res.status(404).json({ success: false, message: "Match not found." });
+        }
+
+        const updateStatus = (players, id, status) => {
+            const player = players.find(p => p._id.equals(id));
+            if (player) player.playingStatus = status;
+        };
+
+        const updateBowlerStats = (players) => {
+            const activeBowler = players.find(p => p.playingStatus === "ActiveBowler");
+            if (activeBowler) {
+                activeBowler.wicketsTaken = (activeBowler.wicketsTaken || 0) + 1;
+                activeBowler.ballsBowled.push("W");
+            }
+        };
+
+        const updateOvers = (currentOvers) => {
+            let [whole, decimal] = currentOvers.toString().split('.').map(Number);
+            decimal = decimal || 0;
+
+            if (decimal === 5) {
+                whole += 1;
+                decimal = 0;
+            } else {
+                decimal += 1;
+            }
+
+            return parseFloat(`${whole}.${decimal}`);
+        };
+
+        const updateInnings = () => {
+            if (match.inning === 1) {
+                match.runsInning1.push("W");
+                match.oversInning1 = updateOvers(match.oversInning1);
+            } else if (match.inning === 2) {
+                match.runsInning2.push("W");
+                match.oversInning2 = updateOvers(match.oversInning2);
+            }
+        };
+
+        let allOut = false; // Track if the team is all out
+
+        if (match.SecondInningBattingTeam.toString().trim() === match.team1.toString().trim()) {
+            updateStatus(match.nominationsT1, outgoingBatsmanId, "Out");
+
+            match.T1wickets += 1;
+            updateBowlerStats(match.nominationsT2);
+            updateInnings();
+
+            if (match.T1wickets >= 10) allOut = true; // Check if all 10 wickets are lost
+
+        } else if (match.SecondInningBattingTeam.toString().trim() === match.team2.toString().trim()) {
+            updateStatus(match.nominationsT2, outgoingBatsmanId, "Out");
+
+            match.T2wickets += 1;
+            updateBowlerStats(match.nominationsT1);
+            updateInnings();
+
+            if (match.T2wickets >= 10) allOut = true; // Check if all 10 wickets are lost
+        } else {
+            return res.status(400).json({ success: false, message: "Invalid SecondInningBattingTeam value." });
+        }
+
+        // If all-out occurs in first innings, increment to inning 2
+        if (match.inning === 1 && allOut) {
+            match.inning += 1;
+            console.log("First inning over! Inning incremented to:", match.inning);
+            // Update playingStatus inside nominationsT1 and nominationsT2
+            match.nominationsT1.forEach(player => {
+                if (player.playingStatus === "ActiveBatsman" || player.playingStatus === "ActiveBowler" || player.playingStatus === "Out" ) {
+                    player.playingStatus = "Playing";
+                }
+            });
+
+            match.nominationsT2.forEach(player => {
+                if (player.playingStatus === "ActiveBatsman" || player.playingStatus === "ActiveBowler" || player.playingStatus === "Out") {
+                    player.playingStatus = "Playing";
+                }
+            });
+        }
+
+        try {
+            if (!matchId || !sportCategory) {
+                return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
+            }
+
+            const ScheduleModel = createScheduleModel(sportCategory);
+            if (!ScheduleModel) {
+                return res.status(400).json({ success: false, message: 'Invalid sport category.' });
+            }
+
+            const match = await ScheduleModel.findById(matchId);
+            if (!match) {
+                return res.status(404).json({ success: false, message: 'Match not found.' });
+            }
+
+            match.status = 'recent';
+            let winningTeam = null;
+
+            if (match.scoreT1 > match.scoreT2) {
+                match.result = match.team1;
+                winningTeam = match.team1;
+            } else if (match.scoreT2 > match.scoreT1) {
+                match.result = match.team2;
+                winningTeam = match.team2;
+            } else {
+                match.result = 'Draw';
+            }
+
+            await match.save();
+
+            // Play-off Logic
+            if (match.pool === 'play-off' && winningTeam) {
+                console.log("Play-off match detected. Updating TBD entries with nominations...");
+                const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
+
+                const updateResult = await ScheduleModel.updateMany(
+                    {
+                        year: match.year,
+                        $or: [{ team1: 'TBD' }, { team2: 'TBD' }],
+                    },
+                    [
+                        {
+                            $set: {
+                                team1: { $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"] },
+                                team2: { $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"] },
+                                nominationsT1: { $cond: [{ $eq: ["$team1", "TBD"] }, winnerNominations?.nominations || [], "$nominationsT1"] },
+                                nominationsT2: { $cond: [{ $eq: ["$team2", "TBD"] }, winnerNominations?.nominations || [], "$nominationsT2"] }
+                            }
+                        }
+                    ]
+                );
+                console.log("TBD & Nominations Update Result:", updateResult);
+            } else if (match.pool === "final" && sportCategory === "Cricket") {
+                console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
+
+                // Fetch all nominated players for Cricket
+                const allNominations = await PlayerNominationForm.find({ sport: "Cricket" }).select("nominations");
+
+                console.log("Total nomination entries found:", allNominations.length);
+
+                // Extract only required player details
+                const allPlayers = allNominations.flatMap(team =>
+                    team.nominations.map(player => ({
+                        name: player.name,
+                        regNo: player.regNo,
+                        section: player.section,
+                        cnic: player.cnic
+                    }))
+                );
+
+                console.log("Total Players Extracted:", allPlayers.length);
+
+                // Prepare bulk operations (just pushing into nominations array without checking)
+                const bulkOperations = allPlayers.map(player => ({
+                    updateOne: {
+                        filter: {}, // No filtering condition, just push
+                        update: {
+                            $push: {
+                                nominations: {
+                                    name: player.name,
+                                    regNo: player.regNo,
+                                    section: player.section,
+                                    cnic: player.cnic,
+                                    totalrunsScored: 0,
+                                    totalballsfaced: 0,
+                                    totalwicketstaken: 0,
+                                    totalrunsconceeded: 0
+                                }
+                            }
+                        },
+                        upsert: true // Create if doesn't exist
+                    }
+                }));
+
+                // Execute bulk update
+                if (bulkOperations.length > 0) {
+                    await BestCricketer.bulkWrite(bulkOperations);
+                    console.log("All nominated players pushed to BestCricketer.");
+                } else {
+                    console.log("No players to update.");
+                }
+
+                const ScheduleModel = createScheduleModel(sportCategory);
+                const allMatches = await ScheduleModel.find({}).select("nominationsT1 nominationsT2");
+
+                // Get all players in BestCricketer
+                const bestCricketers = await BestCricketer.findOne({});
+                if (!bestCricketers) {
+                    console.log("No best cricketers found, skipping update.");
+                    return;
+                }
+
+                for (const player of bestCricketers.nominations) {
+                    let totalRuns = 0;
+                    let totalWickets = 0;
+                    let totalBallsFaced = 0;
+                    let totalRunsConceded = 0;
+
+                    // Search player in nominationsT1 & nominationsT2
+                    for (const match of allMatches) {
+                        const foundInT1 = match.nominationsT1.filter(p => p.regNo === player.regNo);
+                        const foundInT2 = match.nominationsT2.filter(p => p.regNo === player.regNo);
+
+                        // Add runs scored from both teams
+                        foundInT1.forEach(p => totalRuns += p.runsScored);
+                        foundInT2.forEach(p => totalRuns += p.runsScored);
+
+                        // Add wickets taken from both teams
+                        foundInT1.forEach(p => totalWickets += p.wicketsTaken);
+                        foundInT2.forEach(p => totalWickets += p.wicketsTaken);
+
+                        // Calculate total balls faced (length of ballsFaced array)
+                        foundInT1.forEach(p => totalBallsFaced += p.ballsFaced?.length || 0);
+                        foundInT2.forEach(p => totalBallsFaced += p.ballsFaced?.length || 0);
+
+                        // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
+                        const processBallsBowled = (ballsArray) => {
+                            return ballsArray.reduce((sum, ball) => {
+                                if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
+                                if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
+                                return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
+                            }, 0);
+                        };
+
+                        foundInT1.forEach(p => totalRunsConceded += processBallsBowled(p.ballsBowled || []));
+                        foundInT2.forEach(p => totalRunsConceded += processBallsBowled(p.ballsBowled || []));
+                    }
+
+                    // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
+                    await BestCricketer.updateOne(
+                        { "nominations.regNo": player.regNo },
+                        {
+                            $set: {
+                                "nominations.$.totalrunsScored": totalRuns,
+                                "nominations.$.totalwicketstaken": totalWickets,
+                                "nominations.$.totalballsfaced": totalBallsFaced,
+                                "nominations.$.totalrunsconceeded": totalRunsConceded
+                            }
+                        }
+                    );
+
+                    console.log(`Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`);
+                }
+
+                console.log("All players' stats updated in BestCricketer.");
+            }
+
+            await match.save();
+
+            res.json({ 
+                success: true, 
+                message: "Players swapped, wicket updated, and innings data recorded successfully!", 
+                T1wickets: match.T1wickets, 
+                T2wickets: match.T2wickets,
+                oversInning1: match.oversInning1,
+                oversInning2: match.oversInning2,
+                inning: match.inning  // Return updated inning value
+            });
+
+        } catch (error) {
+            console.error("Error in handlealloutinning2:", error);
+            res.status(500).json({ success: false, message: "Internal server error." });
+        }
+    } catch (error) {
+        console.error("Error in handlealloutinning2:", error);
+        res.status(500).json({ success: false, message: "Internal server error." });
+    }
+});
+
+
+
+
 router.post('/stopmatchcricket', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
-    const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
-  
+    const sportCategory = req.user.sportscategory;
+
     try {
         if (!matchId || !sportCategory) {
             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
         }
-  
-        const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-  
+
+        const ScheduleModel = createScheduleModel(sportCategory);
         if (!ScheduleModel) {
             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
         }
-  
+
         const match = await ScheduleModel.findById(matchId);
         if (!match) {
             return res.status(404).json({ success: false, message: 'Match not found.' });
         }
-  
-        // Update status to "recent"
+
         match.status = 'recent';
-  
-        // Determine match result (winner or draw)
         let winningTeam = null;
+
         if (match.scoreT1 > match.scoreT2) {
-            match.result = match.team1; // Team 1 wins
+            match.result = match.team1;
             winningTeam = match.team1;
         } else if (match.scoreT2 > match.scoreT1) {
-            match.result = match.team2; // Team 2 wins
+            match.result = match.team2;
             winningTeam = match.team2;
         } else {
-            match.result = 'Draw'; // Match is a tie
+            match.result = 'Draw';
         }
-  
-        // Save updated match
+
         await match.save();
-  
-        // Handle play-off winner replacements and nomination updates
+
+        // Play-off Logic
         if (match.pool === 'play-off' && winningTeam) {
             console.log("Play-off match detected. Updating TBD entries with nominations...");
-  
-            // Fetch nominations of the winning team
             const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
-  
-            // Update all TBD matches with the winning team and its nominations
+
             const updateResult = await ScheduleModel.updateMany(
                 {
                     year: match.year,
@@ -751,33 +1140,142 @@ router.post('/stopmatchcricket', authenticateJWT, async (req, res) => {
                 [
                     {
                         $set: {
-                            team1: {
-                                $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"]
-                            },
-                            team2: {
-                                $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"]
-                            },
-                            nominationsT1: {
-                                $cond: [{ $eq: ["$team1", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT1"]
-                            },
-                            nominationsT2: {
-                                $cond: [{ $eq: ["$team2", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT2"]
-                            }
+                            team1: { $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"] },
+                            team2: { $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"] },
+                            nominationsT1: { $cond: [{ $eq: ["$team1", "TBD"] }, winnerNominations?.nominations || [], "$nominationsT1"] },
+                            nominationsT2: { $cond: [{ $eq: ["$team2", "TBD"] }, winnerNominations?.nominations || [], "$nominationsT2"] }
                         }
                     }
                 ]
             );
-  
             console.log("TBD & Nominations Update Result:", updateResult);
         }
-  
-        res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
+
+        else if (match.pool === "final" && sportCategory === "Cricket") {
+            console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
+        
+            // Fetch all nominated players for Cricket
+            const allNominations = await PlayerNominationForm.find({ sport: "Cricket" }).select("nominations");
+        
+            console.log("Total nomination entries found:", allNominations.length);
+        
+            // Extract only required player details
+            const allPlayers = allNominations.flatMap(team =>
+                team.nominations.map(player => ({
+                    name: player.name,
+                    regNo: player.regNo,
+                    section: player.section,
+                    cnic: player.cnic
+                }))
+            );
+        
+            console.log("Total Players Extracted:", allPlayers.length);
+        
+            // Prepare bulk operations (just pushing into nominations array without checking)
+            const bulkOperations = allPlayers.map(player => ({
+                updateOne: {
+                    filter: {}, // No filtering condition, just push
+                    update: {
+                        $push: {
+                            nominations: {
+                                name: player.name,
+                                regNo: player.regNo,
+                                section: player.section,
+                                cnic: player.cnic,
+                                totalrunsScored: 0,
+                                totalballsfaced: 0,
+                                totalwicketstaken: 0,
+                                totalrunsconceeded: 0
+                            }
+                        }
+                    },
+                    upsert: true // Create if doesn't exist
+                }
+            }));
+        
+            // Execute bulk update
+            if (bulkOperations.length > 0) {
+                await BestCricketer.bulkWrite(bulkOperations);
+                console.log("All nominated players pushed to BestCricketer.");
+            } else {
+                console.log("No players to update.");
+            }
+        
+            const ScheduleModel = createScheduleModel(sportCategory);
+            const allMatches = await ScheduleModel.find({}).select("nominationsT1 nominationsT2");
+        
+            // Get all players in BestCricketer
+            const bestCricketers = await BestCricketer.findOne({});
+            if (!bestCricketers) {
+                console.log("No best cricketers found, skipping update.");
+                return;
+            }
+        
+            for (const player of bestCricketers.nominations) {
+                let totalRuns = 0;
+                let totalWickets = 0;
+                let totalBallsFaced = 0;
+                let totalRunsConceded = 0;
+        
+                // Search player in nominationsT1 & nominationsT2
+                for (const match of allMatches) {
+                    const foundInT1 = match.nominationsT1.filter(p => p.regNo === player.regNo);
+                    const foundInT2 = match.nominationsT2.filter(p => p.regNo === player.regNo);
+        
+                    // Add runs scored from both teams
+                    foundInT1.forEach(p => totalRuns += p.runsScored);
+                    foundInT2.forEach(p => totalRuns += p.runsScored);
+        
+                    // Add wickets taken from both teams
+                    foundInT1.forEach(p => totalWickets += p.wicketsTaken);
+                    foundInT2.forEach(p => totalWickets += p.wicketsTaken);
+        
+                    // Calculate total balls faced (length of ballsFaced array)
+                    foundInT1.forEach(p => totalBallsFaced += p.ballsFaced?.length || 0);
+                    foundInT2.forEach(p => totalBallsFaced += p.ballsFaced?.length || 0);
+        
+                    // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
+                    const processBallsBowled = (ballsArray) => {
+                        return ballsArray.reduce((sum, ball) => {
+                            if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
+                            if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
+                            return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
+                        }, 0);
+                    };
+                    
+        
+                    foundInT1.forEach(p => totalRunsConceded += processBallsBowled(p.ballsBowled || []));
+                    foundInT2.forEach(p => totalRunsConceded += processBallsBowled(p.ballsBowled || []));
+                }
+        
+                // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
+                await BestCricketer.updateOne(
+                    { "nominations.regNo": player.regNo },
+                    {
+                        $set: {
+                            "nominations.$.totalrunsScored": totalRuns,
+                            "nominations.$.totalwicketstaken": totalWickets,
+                            "nominations.$.totalballsfaced": totalBallsFaced,
+                            "nominations.$.totalrunsconceeded": totalRunsConceded
+                        }
+                    }
+                );
+        
+                console.log(`Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`);
+            }
+        
+            console.log("All players' stats updated in BestCricketer.");
+        }
+        
+            
+        
+        
+        res.json({ success: true, message: 'Match stopped successfully.', match });
     } catch (error) {
-        console.error("Error in /stopmatch:", error);
+        console.error("Error in /stopmatchcricket:", error);
         res.status(500).json({ success: false, message: 'Error stopping the match', error });
     }
-  });
-
+});
 
 
   
@@ -835,6 +1333,8 @@ router.post('/stopmatchcricket', authenticateJWT, async (req, res) => {
 
 
 router.post("/updateScoreCricket", authenticateJWT, async (req, res) => {
+    // const session = await mongoose.startSession(); // Start MongoDB transaction session
+    // session.startTransaction();
     try {
         const { matchId, playerId, team, runs } = req.body;
         const sportCategory = req.user.sportscategory;
@@ -853,8 +1353,8 @@ router.post("/updateScoreCricket", authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: "Match not found." });
         }
 
-        console.log("Received match:", match);
-        console.log("Player ID:", playerId, "Team:", team, "Runs:", runs);
+        // console.log("Received match:", match);
+        // console.log("Player ID:", playerId, "Team:", team, "Runs:", runs);
 
         let updatedBatsman = null;
         let teamKey = null;
@@ -871,7 +1371,7 @@ router.post("/updateScoreCricket", authenticateJWT, async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid team value." });
         }
 
-        console.log("✅ After Updating: scoreT1 =", match.scoreT1, ", scoreT2 =", match.scoreT2);
+        // console.log("✅ After Updating: scoreT1 =", match.scoreT1, ", scoreT2 =", match.scoreT2);
 
         updatedBatsman = match.nominationsT1.find(player => player._id.equals(new mongoose.Types.ObjectId(playerId)) && player.playingStatus === "ActiveBatsman");
         if (updatedBatsman) {
@@ -894,7 +1394,7 @@ router.post("/updateScoreCricket", authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: "Player not found or not an active batsman." });
         }
 
-        console.log(`✅ Batsman found in ${teamKey}, updating score...`);
+        // console.log(`✅ Batsman found in ${teamKey}, updating score...`);
 
         if (!updatedBatsman.ballsFaced) updatedBatsman.ballsFaced = [];
         if (!match.runsInning1) match.runsInning1 = [];
@@ -915,7 +1415,7 @@ router.post("/updateScoreCricket", authenticateJWT, async (req, res) => {
         const activeBowler = bowlingTeam.find(player => player.playingStatus === "ActiveBowler");
 
         if (activeBowler) {
-            console.log(`✅ Active bowler found: ${activeBowler.name}, updating balls bowled...`);
+            // console.log(`✅ Active bowler found: ${activeBowler.name}, updating balls bowled...`);
             if (!activeBowler.ballsBowled) activeBowler.ballsBowled = [];
             activeBowler.ballsBowled.push(runs);
         } else {
@@ -995,6 +1495,20 @@ router.post("/updateByesCricket", authenticateJWT, async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid team value." });
         }
 
+         // Identify the bowling team
+         const bowlingTeamKey = match.FirstInningBattingTeam.toString().trim() === match.team1.toString().trim() ? "team2" : "team1";
+         const bowlingTeam = bowlingTeamKey === "team1" ? match.nominationsT1 : match.nominationsT2;
+ 
+         // Find the active bowler
+         const activeBowler = bowlingTeam.find(player => player.playingStatus === "ActiveBowler");
+ 
+         if (activeBowler) {
+             // Add the byes to the bowler's ballsBowled array
+             activeBowler.ballsBowled.push(`${byes}B`);
+         } else {
+             console.warn("No active bowler found.");
+         }
+
         // Save changes to database
         await match.save();
 
@@ -1066,6 +1580,20 @@ router.post("/updateByesCricket2ndInning", authenticateJWT, async (req, res) => 
         } else {
             return res.status(400).json({ success: false, message: "Invalid team value." });
         }
+
+         // Identify the bowling team
+         const bowlingTeamKey = match.SecondInningBattingTeam.toString().trim() === match.team1.toString().trim() ? "team2" : "team1";
+         const bowlingTeam = bowlingTeamKey === "team1" ? match.nominationsT1 : match.nominationsT2;
+ 
+         // Find the active bowler
+         const activeBowler = bowlingTeam.find(player => player.playingStatus === "ActiveBowler");
+ 
+         if (activeBowler) {
+             // Add the byes to the bowler's ballsBowled array
+             activeBowler.ballsBowled.push(`${byes}B`);
+         } else {
+             console.warn("No active bowler found.");
+         }
 
         // Save changes to database
         await match.save();
@@ -1201,10 +1729,6 @@ router.post("/updateExtrasCricket2ndInning", authenticateJWT, async (req, res) =
 
 
 
-
-
-
-
 const updateOvers = (currentOvers) => {
     let [whole, decimal] = currentOvers.toString().split('.').map(Number);
     decimal = decimal || 0;
@@ -1218,6 +1742,46 @@ const updateOvers = (currentOvers) => {
 
     return parseFloat(`${whole}.${decimal}`);
 };
+
+
+
+
+
+// Route to get the best batsman and best bowler
+router.get('/bestcricketer', authenticateJWT, async (req, res) => {
+    try {
+        const cricketerData = await BestCricketer.findOne(); // Assuming there's a single document storing nominations
+
+        if (!cricketerData || cricketerData.nominations.length === 0) {
+            return res.status(404).json({ success: false, message: 'No nominations found.' });
+        }
+
+        // Find best batsman (highest total runs scored)
+        const bestBatsman = cricketerData.nominations.reduce((prev, curr) => 
+            (curr.totalrunsScored > prev.totalrunsScored ? curr : prev), cricketerData.nominations[0]);
+
+        // Find best bowler (highest wickets taken)
+        const bestBowler = cricketerData.nominations.reduce((prev, curr) => 
+            (curr.totalwicketstaken > prev.totalwicketstaken ? curr : prev), cricketerData.nominations[0]);
+
+        res.json({
+            success: true,
+            bestBatsman: {
+                name: bestBatsman.name,
+                regNo: bestBatsman.regNo,
+                runs: bestBatsman.totalrunsScored,
+            },
+            bestBowler: {
+                name: bestBowler.name,
+                regNo: bestBowler.regNo,
+                wickets: bestBowler.totalwicketstaken,
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching best cricketers:", error);
+        res.status(500).json({ success: false, message: 'Server error while fetching best cricketers.' });
+    }
+});
 
 
 

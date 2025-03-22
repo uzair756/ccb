@@ -72,6 +72,22 @@ const playerNominationSchema = new mongoose.Schema({
   lastUpdatedAt: { type: Date, default: Date.now },
 });
 
+const bestCricketerSchema = new mongoose.Schema({
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalrunsScored: { type: Number, default: 0 }, // Total runs scored
+      totalballsfaced: { type: Number, default: 0 }, // Total runs scored
+      totalwicketstaken: { type: Number, default: 0 }, // Total runs scored
+      totalrunsconceeded: { type: Number, default: 0 }, // Total runs scored 
+    }
+  ],
+});
+
 const trialEventSchema = new mongoose.Schema({
   sportCategory: { type: String, required: true },
   date: { type: String, required: true }, // Day (e.g., 'Monday')
@@ -636,6 +652,7 @@ const PlayerNominationForm = mongoose.model('PlayerNominationForm', playerNomina
 const TrialEvent = mongoose.model('TrialEvent', trialEventSchema);
 const TeamRankings = mongoose.model('TeamRankings', rankingSchema);
 const Pools = mongoose.model("Pools", poolsSchema);
+const BestCricketer = mongoose.model("BestCricketer", bestCricketerSchema);
 // const Schedules = mongoose.model("Schedules", schedulesSchema);
 // Function to create the correct model dynamically
 
@@ -650,5 +667,5 @@ const createScheduleModel = (sport) => {
   return mongoose.model(modelName, scheduleSchema);
 };
 
-module.exports = { DSAUser, SportsCoachUser, CoordinatorUser, RepUser, AdminPost, SportsRules, PlayerNominationForm, TrialEvent, CaptainUser, TeamRankings, Pools, createScheduleModel, RefUser };
+module.exports = { DSAUser, SportsCoachUser, CoordinatorUser, RepUser, AdminPost, SportsRules, PlayerNominationForm, TrialEvent, CaptainUser, TeamRankings, Pools, createScheduleModel, RefUser, BestCricketer };
 // Schedules (to be added in module.exports)
