@@ -2,7 +2,7 @@
 // router.post('/createSemiFinalMatch', authenticateJWT, async (req, res) => {
 //   try {
 //     const { team1, team2, pool, year } = req.body;
-    
+
 //     const newMatch = new Schedules({
 //       team1,
 //       team2,
@@ -72,8 +72,6 @@
 //   }
 // });
 
-
-
 // router.post('/updateScorefootball', authenticateJWT, async (req, res) => {
 //   const { matchId, team } = req.body;
 
@@ -103,10 +101,6 @@
 //       res.status(500).json({ success: false, message: 'Failed to update score' });
 //   }
 // });
-
-
-
-
 
 // router.post('/stopmatchfootball', authenticateJWT, async (req, res) => {
 //   const { matchId } = req.body;
@@ -173,26 +167,26 @@
 // router.post('/stopmatch', authenticateJWT, async (req, res) => {
 //     const { matchId } = req.body;
 //     const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
-  
+
 //     try {
 //         if (!matchId || !sportCategory) {
 //             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
 //         }
-  
+
 //         const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-  
+
 //         if (!ScheduleModel) {
 //             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
 //         }
-  
+
 //         const match = await ScheduleModel.findById(matchId);
 //         if (!match) {
 //             return res.status(404).json({ success: false, message: 'Match not found.' });
 //         }
-  
+
 //         // Update status to "recent"
 //         match.status = 'recent';
-  
+
 //         // Determine match result (winner or draw)
 //         let winningTeam = null;
 //         if (match.scoreT1 > match.scoreT2) {
@@ -204,17 +198,17 @@
 //         } else {
 //             match.result = 'Draw'; // Match is a tie
 //         }
-  
+
 //         // Save updated match
 //         await match.save();
-  
+
 //         // Handle play-off winner replacements and nomination updates
 //         if (match.pool === 'play-off' && winningTeam) {
 //             console.log("Play-off match detected. Updating TBD entries with nominations...");
-  
+
 //             // Fetch nominations of the winning team
 //             const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
-  
+
 //             // Update all TBD matches with the winning team and its nominations
 //             const updateResult = await ScheduleModel.updateMany(
 //                 {
@@ -240,10 +234,10 @@
 //                     }
 //                 ]
 //             );
-  
+
 //             console.log("TBD & Nominations Update Result:", updateResult);
 //         }
-  
+
 //         res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
 //     } catch (error) {
 //         console.error("Error in /stopmatch:", error);
@@ -292,100 +286,131 @@
 //   }
 // });
 
-
-
-const mongoose = require('mongoose');
-const express = require('express');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const { RefUser, Schedules,createScheduleModel ,PlayerNominationForm} = require('../models'); // Ensure the RefUser schema is defined in your models
-const authenticateJWT = require('../middleware');
-const config = require('../config'); // Include JWT secret configuration
+const mongoose = require("mongoose");
+const express = require("express");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const {
+  RefUser,
+  Schedules,
+  createScheduleModel,
+  PlayerNominationForm,
+} = require("../models"); // Ensure the RefUser schema is defined in your models
+const authenticateJWT = require("../middleware");
+const config = require("../config"); // Include JWT secret configuration
 
 const router = express.Router();
 
-router.post('/addref',authenticateJWT, async (req, res) => {
-    try {
-      const existingUser = await RefUser.findOne({ email: req.body.email });
-      if (existingUser) return res.status(400).json({ success: false, error: 'Email already exists' });
-  
-      const hashedPassword = await bcrypt.hash(req.body.password, 10);
-      const user = new RefUser({ ...req.body, password: hashedPassword });
-      const result = await user.save();
-      res.status(201).json({ success: true, user: result });
-    } catch (error) {
-      res.status(500).json({ success: false, error: 'Error creating account' });
-    }
-  });
-  
+router.post("/addref", authenticateJWT, async (req, res) => {
+  try {
+    const existingUser = await RefUser.findOne({ email: req.body.email });
+    if (existingUser)
+      return res
+        .status(400)
+        .json({ success: false, error: "Email already exists" });
 
-
-  // Handle user login
-router.post('/reflogin', async (req, res) => {
-    const { email, password } = req.body;
-    if (email && password) {
-      const user = await RefUser.findOne({ email });
-      if (user && await bcrypt.compare(password, user.password)) {
-        // Generate JWT token
-        const token = jwt.sign({ id: user._id, username: user.username, email: user.email, loggedin: user.loggedin ,sportscategory: user.sportscategory}, config.JWT_SECRET, { expiresIn: '24h' });
-        res.json({ success: true, message: 'Logged in successfully', token });
-      } else {
-        res.json({ success: false, message: 'Invalid credentials' });
-      }
-    } else {
-      res.json({ success: false, message: 'Please provide email and password' });
-    }
-  });
-  router.get('/reflandingpage', authenticateJWT, (req, res) => {
-    res.json({ success: true, user: req.user });
-  });
-
-  router.get('/refmatches', authenticateJWT, async (req, res) => {
-    try {
-        const sportCategory = req.user.sportscategory; // Get the user's sport category
-
-        if (!sportCategory) {
-            return res.status(400).json({ success: false, message: 'Sport category is required.' });
-        }
-
-        const ScheduleModel = createScheduleModel(sportCategory); // Dynamically get the model
-
-        if (!ScheduleModel) {
-            return res.status(400).json({ success: false, message: 'Invalid sport category.' });
-        }
-
-        const matches = await ScheduleModel.find({
-            sport: sportCategory, 
-            status: { $in: ['upcoming'] }, // Fetch only live and upcoming matches
-        });
-
-        res.json({ success: true, matches });
-    } catch (error) {
-        console.error("Error fetching matches:", error);
-        res.status(500).json({ success: false, message: 'Server error while fetching matches.' });
-    }
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+    const user = new RefUser({ ...req.body, password: hashedPassword });
+    const result = await user.save();
+    res.status(201).json({ success: true, user: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Error creating account" });
+  }
 });
 
+// Handle user login
+router.post("/reflogin", async (req, res) => {
+  const { email, password } = req.body;
+  if (email && password) {
+    const user = await RefUser.findOne({ email });
+    if (user && (await bcrypt.compare(password, user.password))) {
+      // Generate JWT token
+      const token = jwt.sign(
+        {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          loggedin: user.loggedin,
+          sportscategory: user.sportscategory,
+        },
+        config.JWT_SECRET,
+        { expiresIn: "24h" },
+      );
+      res.json({ success: true, message: "Logged in successfully", token });
+    } else {
+      res.json({ success: false, message: "Invalid credentials" });
+    }
+  } else {
+    res.json({ success: false, message: "Please provide email and password" });
+  }
+});
+router.get("/reflandingpage", authenticateJWT, (req, res) => {
+  res.json({ success: true, user: req.user });
+});
 
+router.get("/refmatches", authenticateJWT, async (req, res) => {
+  try {
+    const sportCategory = req.user.sportscategory; // Get the user's sport category
 
-router.post('/createSemiFinalMatch', authenticateJWT, async (req, res) => {
+    if (!sportCategory) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Sport category is required." });
+    }
+
+    const ScheduleModel = createScheduleModel(sportCategory); // Dynamically get the model
+
+    if (!ScheduleModel) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid sport category." });
+    }
+
+    const matches = await ScheduleModel.find({
+      sport: sportCategory,
+      status: { $in: ["upcoming", "live"] }, // Fetch only live and upcoming matches
+    });
+
+    res.json({ success: true, matches });
+  } catch (error) {
+    console.error("Error fetching matches:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Server error while fetching matches.",
+      });
+  }
+});
+
+router.post("/createSemiFinalMatch", authenticateJWT, async (req, res) => {
   try {
     const { team1, team2, pool, year } = req.body;
     const sport = req.user.sportscategory; // Get the logged-in user's sport category
 
     if (!team1 || !team2 || !pool || !year || !sport) {
-      return res.status(400).json({ success: false, message: 'All fields are required.' });
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required." });
     }
 
     const ScheduleModel = createScheduleModel(sport); // Get dynamic model
 
     if (!ScheduleModel) {
-      return res.status(400).json({ success: false, message: 'Invalid sport category.' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid sport category." });
     }
 
     // Fetch nominations for both teams
-    const team1Nominations = await PlayerNominationForm.findOne({ department: team1, sport });
-    const team2Nominations = await PlayerNominationForm.findOne({ department: team2, sport });
+    const team1Nominations = await PlayerNominationForm.findOne({
+      department: team1,
+      sport,
+    });
+    const team2Nominations = await PlayerNominationForm.findOne({
+      department: team2,
+      sport,
+    });
 
     // Create a new semi-final match with nominations
     const newMatch = new ScheduleModel({
@@ -393,43 +418,45 @@ router.post('/createSemiFinalMatch', authenticateJWT, async (req, res) => {
       team2,
       pool,
       year,
-      status: 'upcoming',
+      status: "upcoming",
       sport,
       nominationsT1: team1Nominations ? team1Nominations.nominations : [],
       nominationsT2: team2Nominations ? team2Nominations.nominations : [],
     });
 
     await newMatch.save();
-    res.json({ success: true, message: 'Semi-final and final matches created successfully with nominations.' });
+    res.json({
+      success: true,
+      message:
+        "Semi-final and final matches created successfully with nominations.",
+    });
   } catch (error) {
-    console.error('Error creating match:', error);
-    res.status(500).json({ success: false, message: 'Server error while creating match.' });
+    console.error("Error creating match:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Server error while creating match." });
   }
 });
-  
 
 // Get a specific match by ID (FIXED)
-router.get('/match/:sport/:id', authenticateJWT, async (req, res) => {
-    try {
-        const { sport, id } = req.params;
-        const MatchModel = createScheduleModel(sport); // Get the correct model
+router.get("/match/:sport/:id", authenticateJWT, async (req, res) => {
+  try {
+    const { sport, id } = req.params;
+    const MatchModel = createScheduleModel(sport); // Get the correct model
 
-        const match = await MatchModel.findById(id);
+    const match = await MatchModel.findById(id);
 
-        if (!match) {
-            return res.status(404).json({ success: false, message: 'Match not found' });
-        }
-
-        res.status(200).json({ success: true, match });
-    } catch (error) {
-        console.error('Error fetching match details:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
     }
+
+    res.status(200).json({ success: true, match });
+  } catch (error) {
+    console.error("Error fetching match details:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
 });
-
-
-
-
-
 
 module.exports = router;
