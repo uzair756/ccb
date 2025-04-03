@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const { RepUser, PlayerNominationForm, TrialEvent} = require('../models');
 const authenticateJWT = require('../middleware');
 const config = require('../config');
+const path = require('path');
 
 const router = express.Router();
 
@@ -191,21 +192,86 @@ router.get('/downloadPDF/:sport', authenticateJWT, async (req, res) => {
     }
 
     // Generate PDF
-    const doc = new PDFDocument();
+    const doc = new PDFDocument({ margin: 50 });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${sport}_nominations.pdf`);
 
-    doc.text(`Nominations for ${sport} (${department})`, { align: 'center', underline: true });
+    // Add IST logo with error handling
+    try {
+      const logoPath = path.join(__dirname, '../assets/ist.png');
+      doc.image(logoPath, 50, 45, { width: 50 });
+    } catch (imageError) {
+      console.error('Error loading logo:', imageError);
+      doc.fontSize(14).text('Institute of Space Technology', 50, 50);
+    }
+
+    // Header text
+    doc.fontSize(14).text('Institute of Space Technology', 110, 50, { align: 'center' });
     doc.moveDown();
 
-    nomination.nominations.forEach((player, index) => {
-      doc.text(
-        `Player ${index + 1}: Name: ${player.name}, CNIC: ${player.cnic}, Section: ${player.section}`
-      );
-      doc.moveDown(0.5);
+    // Document info table
+    doc.fontSize(10);
+    doc.text('Doc. No.', 50, 100);
+    doc.text('IST-05A-5OP-03', 150, 100);
+    doc.text('Form No.', 50, 120);
+    doc.text('IST-05A-F-07', 150, 120);
+    doc.text('Date of Issue', 50, 140);
+    doc.text(new Date().toLocaleDateString(), 150, 140);
+
+    // Title
+    doc.fontSize(14).text('Nomination Form Departmental Team', 50, 180, { underline: true });
+    doc.fontSize(10).text('Page #', 450, 180);
+    doc.text('1 of 1', 500, 180);
+    doc.text('Student Affairs', 50, 200);
+
+    // Horizontal line
+    doc.moveTo(50, 220).lineTo(550, 220).stroke();
+
+    // Event section
+    doc.fontSize(12).text('Event', 50, 240, { underline: true });
+    
+    // Department Representative Info (using rep fields from your schema)
+    doc.fontSize(10);
+    doc.text('Department Representative', 50, 270);
+    doc.text('Name:', 200, 270);
+    doc.text(nomination.repName || 'Not specified', 250, 270);
+    doc.text('Email:', 400, 270);
+    doc.text(nomination.repEmail || 'Not specified', 450, 270);
+
+    doc.text('Department:', 50, 290);
+    doc.text(nomination.repDepartment || 'Not specified', 250, 290);
+    doc.text('Category:', 400, 290);
+    doc.text(nomination.sport || 'Not specified', 450, 290);
+
+    // Team members table header
+    doc.fontSize(10).text('#', 50, 330);
+    doc.text('Shirt No.', 80, 330);
+    doc.text('Name', 130, 330);
+    doc.text('Reg. No.', 250, 330);
+    doc.text('CNIC No.', 350, 330);
+    doc.text('Section', 450, 330);
+
+    // Team members data
+    let y = 350;
+    nomination.nominations?.forEach((player, index) => {
+      doc.text(`${index + 1}`, 50, y);
+      doc.text(player?.shirtNo || 'N/A', 80, y);
+      doc.text(player?.name || 'N/A', 130, y);
+      doc.text(player?.regNo || 'N/A', 250, y);
+      doc.text(player?.cnic || 'N/A', 350, y);
+      doc.text(player?.section || 'N/A', 450, y);
+      y += 20;
     });
 
-    doc.pipe(res); // Pipe PDF content to the response
+    // Footer
+    doc.moveTo(50, y + 30).lineTo(550, y + 30).stroke();
+    doc.fontSize(8).text('CONTROLLED', 50, y + 40);
+    doc.text(new Date().toLocaleDateString(), 150, y + 40);
+    
+    doc.fontSize(10).text('Last Updated By: ' + (nomination.lastUpdatedBy || 'Unknown'), 50, y + 70);
+    doc.text('Date: ' + nomination.lastUpdatedAt.toLocaleDateString(), 400, y + 70);
+
+    doc.pipe(res);
     doc.end();
   } catch (error) {
     console.error('Error generating PDF:', error);

@@ -235,11 +235,11 @@ const getScheduleSchema = (sport) => {
       T1wickets: { type: Number, default: 0 },
       T2wickets: { type: Number, default: 0 },
       // Separate Overs Tracking for Each Inning
-    oversInning1: { type: Number, default: 0.0 },
-    oversInning2: { type: Number, default: 0.0 },
-    // Overall match runs breakdown per innings
-    runsInning1: [{ type: String }], // Stores runs scored in 1st inning (each ball)
-    runsInning2: [{ type: String }], // Stores runs scored in 2nd inning (each ball)
+      oversInning1: { type: Number, default: 0.0 },
+      oversInning2: { type: Number, default: 0.0 },
+      // Overall match runs breakdown per innings
+      runsInning1: [{ type: String }], // Stores runs scored in 1st inning (each ball)
+      runsInning2: [{ type: String }], // Stores runs scored in 2nd inning (each ball)
       nominationsT1: [
         {
             shirtNo: { type: String, required: true },
