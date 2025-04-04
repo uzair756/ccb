@@ -468,8 +468,8 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
             // Fetch nominations from playerNominationSchema
             // const team1Nominations = await PlayerNominationForm.findOne({ department: team1 });
             // const team2Nominations = await PlayerNominationForm.findOne({ department: team2 });
-            const team1Nominations = await PlayerNominationForm.findOne({ department: team1, sport });
-            const team2Nominations = await PlayerNominationForm.findOne({ department: team2, sport });
+            const team1Nominations = await PlayerNominationForm.findOne({ department: team1, sport, year: currentYear  });
+            const team2Nominations = await PlayerNominationForm.findOne({ department: team2, sport, year: currentYear  });
 
 
             schedules.push({
@@ -493,9 +493,9 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
       // Fetch nominations for play-off teams
       const playOffTeam1 = validTeams[5];
       const playOffTeam2 = validTeams[6];
-    
-      const playOffTeam1Nominations = await PlayerNominationForm.findOne({ department: playOffTeam1, sport });
-      const playOffTeam2Nominations = await PlayerNominationForm.findOne({ department: playOffTeam2, sport });
+     
+      const playOffTeam1Nominations = await PlayerNominationForm.findOne({ department: playOffTeam1, sport, year: currentYear  });
+      const playOffTeam2Nominations = await PlayerNominationForm.findOne({ department: playOffTeam2, sport, year: currentYear  });
     
       schedules.unshift({
         pool: 'play-off',

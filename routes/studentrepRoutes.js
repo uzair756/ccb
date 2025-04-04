@@ -96,18 +96,23 @@ router.post('/changepasswordrep', authenticateJWT, async (req, res) => {
 });
 
 
-// Route to get the existing nomination form
+// Route to get the existing nomination form for current year
 router.get('/getNominationForm/:sport', authenticateJWT, async (req, res) => {
   const { sport } = req.params;
-  const { department } = req.user;  // Assuming department is available in JWT payload
+  const { department } = req.user;
+  const { year } = req.query; // Get year from query params
 
   try {
-    const nomination = await PlayerNominationForm.findOne({ sport, department });
+    const nomination = await PlayerNominationForm.findOne({ 
+      sport, 
+      department,
+      year: year || new Date().getFullYear().toString() // Default to current year
+    });
 
     if (nomination) {
       return res.json({ success: true, data: nomination });
     } else {
-      return res.json({ success: false, message: 'No nominations found for this sport' });
+      return res.json({ success: false, message: 'No nominations found for this sport and year' });
     }
   } catch (error) {
     console.error('Error fetching nominations:', error);
@@ -118,7 +123,7 @@ router.get('/getNominationForm/:sport', authenticateJWT, async (req, res) => {
 // Route to submit the nomination form (initial submission)
 router.post('/submitNominationForm/:sport', authenticateJWT, async (req, res) => {
   const { sport } = req.params;
-  const { nominations, repId, repName, repEmail, repDepartment, lastUpdatedBy, lastUpdatedAt } = req.body;
+  const { nominations, repId, repName, repEmail, repDepartment, lastUpdatedBy, lastUpdatedAt, year} = req.body;
 
   try {
     const nomination = new PlayerNominationForm({
@@ -131,6 +136,7 @@ router.post('/submitNominationForm/:sport', authenticateJWT, async (req, res) =>
       repDepartment,
       lastUpdatedBy,
       lastUpdatedAt,
+      year,
     });
 
     await nomination.save();
@@ -144,7 +150,7 @@ router.post('/submitNominationForm/:sport', authenticateJWT, async (req, res) =>
 // Route to update the existing nomination form
 router.put('/updateNominationForm/:sport', authenticateJWT, async (req, res) => {
   const { sport } = req.params;
-  const { nominations, repId, repName, repEmail, repDepartment, lastUpdatedBy, lastUpdatedAt } = req.body;
+  const { nominations, repId, repName, repEmail, repDepartment, lastUpdatedBy, lastUpdatedAt, year } = req.body;
 
   try {
     let nomination = await PlayerNominationForm.findOne({ sport, department: repDepartment });
@@ -156,6 +162,7 @@ router.put('/updateNominationForm/:sport', authenticateJWT, async (req, res) => 
     nomination.nominations = nominations;
     nomination.lastUpdatedBy = lastUpdatedBy;
     nomination.lastUpdatedAt = lastUpdatedAt;
+    nomination.year = year;
     await nomination.save();
 
     return res.json({ success: true, message: 'Nomination updated successfully' });
@@ -166,12 +173,16 @@ router.put('/updateNominationForm/:sport', authenticateJWT, async (req, res) => 
 });
 
 
-// Route to fetch nominations by department
+// Route to fetch submitted forms for current year only
 router.get('/getSubmittedForms', authenticateJWT, async (req, res) => {
-  const { department } = req.user; // Get department from the logged-in user
+  const { department } = req.user;
+  const currentYear = new Date().getFullYear().toString();
 
   try {
-    const submittedForms = await PlayerNominationForm.find({ department });
+    const submittedForms = await PlayerNominationForm.find({ 
+      department,
+      year: currentYear 
+    });
     return res.json({ success: true, data: submittedForms });
   } catch (error) {
     console.error('Error fetching submitted forms:', error);

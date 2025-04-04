@@ -55,6 +55,8 @@ const sportsRulesSchema = new mongoose.Schema({
 const playerNominationSchema = new mongoose.Schema({
   sport: { type: String, required: true },
   department: { type: String, required: true },
+  year: { type: String, required: true },
+  
   nominations: [
     {
       shirtNo: { type: String, required: true },
@@ -73,6 +75,7 @@ const playerNominationSchema = new mongoose.Schema({
 });
 
 const bestCricketerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
   nominations: [
     {
       shirtNo: { type: String, required: true },
