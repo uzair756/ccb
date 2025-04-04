@@ -2438,4 +2438,586 @@ router.get("/bestcricketer", authenticateJWT, async (req, res) => {
   }
 });
 
+router.post("/startSuperOver", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, batsmen, bowler, battingTeam, bowlingTeam } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    // Validate batsmen and bowler
+    if (!Array.isArray(batsmen) || batsmen.length !== 2 || !bowler) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select exactly 2 batsmen and 1 bowler",
+      });
+    }
+
+    // Set playing status for selected players
+    const battingTeamKey =
+      battingTeam === match.team1 ? "nominationsT1" : "nominationsT2";
+    const bowlingTeamKey =
+      bowlingTeam === match.team1 ? "nominationsT1" : "nominationsT2";
+
+    // Update batsmen status
+    match[battingTeamKey].forEach((player) => {
+      if (batsmen.includes(player._id.toString())) {
+        player.playingStatus = "ActiveBatsman";
+      }
+    });
+
+    // Update bowler status
+    match[bowlingTeamKey].forEach((player) => {
+      if (player._id.toString() === bowler) {
+        player.playingStatus = "ActiveBowler";
+      }
+    });
+
+    // Initialize super over data with two innings
+    match.superOver = {
+      firstInning: {
+        battingTeam: battingTeam,
+        bowlingTeam: bowlingTeam,
+        runs: 0,
+        wickets: 0,
+        ballsBowled: 0,
+        balls: [],
+        batsmen: batsmen,
+        bowler: bowler,
+      },
+      secondInning: {
+        battingTeam: bowlingTeam, // Teams switch for second inning
+        bowlingTeam: battingTeam,
+        runs: 0,
+        wickets: 0,
+        ballsBowled: 0,
+        balls: [],
+        batsmen: [],
+        bowler: null,
+      },
+      currentInning: 1,
+      winner: null,
+      isComplete: false,
+    };
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Super Over started",
+      superOver: match.superOver,
+    });
+  } catch (error) {
+    console.error("Error starting super over:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post(
+  "/prepareSuperOverSecondInning",
+  authenticateJWT,
+  async (req, res) => {
+    try {
+      const { matchId } = req.body;
+      const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+      const match = await ScheduleModel.findById(matchId);
+      if (!match) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Match not found" });
+      }
+
+      if (!match.superOver || match.superOver.currentInning !== 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Super Over not started or already in second inning",
+        });
+      }
+
+      // Get teams for second inning
+      const secondBattingTeam = match.superOver.secondInning.battingTeam;
+      const secondBowlingTeam = match.superOver.secondInning.bowlingTeam;
+
+      // Get players from database
+      const secondBattingPlayers =
+        secondBattingTeam === match.team1
+          ? match.nominationsT1
+          : match.nominationsT2;
+      const secondBowlingPlayers =
+        secondBowlingTeam === match.team1
+          ? match.nominationsT1
+          : match.nominationsT2;
+
+      // Select first two available batsmen
+      const availableBatsmen = secondBattingPlayers.filter(
+        (p) => p.playingStatus === "Playing",
+      );
+      const newBatsmen = availableBatsmen
+        .slice(0, 2)
+        .map((p) => p._id.toString());
+
+      // Select first available bowler
+      const availableBowlers = secondBowlingPlayers.filter(
+        (p) => p.playingStatus === "Playing",
+      );
+      const newBowler = availableBowlers[0]?._id.toString() || null;
+
+      if (newBatsmen.length < 2 || !newBowler) {
+        return res.status(400).json({
+          success: false,
+          message: "Not enough players available for second inning",
+        });
+      }
+
+      // Update player statuses
+      secondBattingPlayers.forEach((player) => {
+        if (newBatsmen.includes(player._id.toString())) {
+          player.playingStatus = "ActiveBatsman";
+        }
+      });
+
+      secondBowlingPlayers.forEach((player) => {
+        if (player._id.toString() === newBowler) {
+          player.playingStatus = "ActiveBowler";
+        }
+      });
+
+      // Update second inning data
+      match.superOver.secondInning.batsmen = newBatsmen;
+      match.superOver.secondInning.bowler = newBowler;
+      match.superOver.currentInning = 2;
+
+      await match.save();
+      res.json({
+        success: true,
+        message: "Second inning prepared",
+        batsmen: newBatsmen,
+        bowler: newBowler,
+        superOver: match.superOver,
+      });
+    } catch (error) {
+      console.error("Error preparing second inning:", error);
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  },
+);
+
+router.post("/updateSuperOverScore", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, playerId, team, runs, inning } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    console.log(match);
+    if (!match.superOver || match.superOver.isComplete) {
+      return res.status(400).json({
+        success: false,
+        message: "Super Over not started or already complete",
+      });
+    }
+
+    // Update the correct inning
+    const inningData =
+      inning === 1 ? match.superOver.firstInning : match.superOver.secondInning;
+
+    if (inningData.ballsBowled >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Inning already complete (6 balls bowled)",
+      });
+    }
+
+    inningData.runs += runs;
+    inningData.ballsBowled += 1;
+    inningData.balls.push(runs);
+
+    // Update player stats
+    const teamKey = team === match.team1 ? "nominationsT1" : "nominationsT2";
+    const playerIndex = match[teamKey].findIndex(
+      (p) => p._id.toString() === playerId,
+    );
+    if (playerIndex !== -1) {
+      match[teamKey][playerIndex].runsScored =
+        (match[teamKey][playerIndex].runsScored || 0) + runs;
+      if (!match[teamKey][playerIndex].ballsFaced) {
+        match[teamKey][playerIndex].ballsFaced = [];
+      }
+      match[teamKey][playerIndex].ballsFaced.push(runs);
+    }
+
+    // Update bowler stats if this is a valid ball (not a wide or no ball)
+    const bowlerTeamKey =
+      inning === 1
+        ? match.superOver.firstInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2"
+        : match.superOver.secondInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2";
+
+    const bowlerId =
+      inning === 1
+        ? match.superOver.firstInning.bowler
+        : match.superOver.secondInning.bowler;
+
+    const bowlerIndex = match[bowlerTeamKey].findIndex(
+      (p) => p._id.toString() === bowlerId,
+    );
+    if (bowlerIndex !== -1) {
+      if (!match[bowlerTeamKey][bowlerIndex].ballsBowled) {
+        match[bowlerTeamKey][bowlerIndex].ballsBowled = [];
+      }
+      match[bowlerTeamKey][bowlerIndex].ballsBowled.push(runs);
+      match[bowlerTeamKey][bowlerIndex].runsConceded =
+        (match[bowlerTeamKey][bowlerIndex].runsConceded || 0) + runs;
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Score updated",
+      superOver: match.superOver,
+    });
+  } catch (error) {
+    console.error("Error updating super over score:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post("/updateSuperOverWicket", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, outgoingBatsmanId, newBatsmanId, inning } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    if (!match.superOver || match.superOver.isComplete) {
+      return res.status(400).json({
+        success: false,
+        message: "Super Over not started or already complete",
+      });
+    }
+
+    // Update the correct inning
+    const inningData =
+      inning === 1 ? match.superOver.firstInning : match.superOver.secondInning;
+
+    if (inningData.ballsBowled >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Inning already complete (6 balls bowled)",
+      });
+    }
+
+    inningData.wickets += 1;
+    inningData.ballsBowled += 1;
+    inningData.balls.push("W");
+
+    // Update batsmen array if we have a new batsman
+    if (newBatsmanId) {
+      const batsmanIndex = inningData.batsmen.findIndex(
+        (id) => id.toString() === outgoingBatsmanId,
+      );
+      if (batsmanIndex !== -1) {
+        inningData.batsmen[batsmanIndex] = newBatsmanId;
+      }
+    }
+
+    // Update player status
+    const battingTeamKey =
+      inning === 1
+        ? match.superOver.firstInning.battingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2"
+        : match.superOver.secondInning.battingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2";
+
+    // Mark outgoing batsman as out
+    const outgoingIndex = match[battingTeamKey].findIndex(
+      (p) => p._id.toString() === outgoingBatsmanId,
+    );
+    if (outgoingIndex !== -1) {
+      match[battingTeamKey][outgoingIndex].playingStatus = "Out";
+    }
+
+    // Mark new batsman as active
+    if (newBatsmanId) {
+      const newBatsmanIndex = match[battingTeamKey].findIndex(
+        (p) => p._id.toString() === newBatsmanId,
+      );
+      if (newBatsmanIndex !== -1) {
+        match[battingTeamKey][newBatsmanIndex].playingStatus = "ActiveBatsman";
+      }
+    }
+
+    // Update bowler stats (wicket)
+    const bowlerTeamKey =
+      inning === 1
+        ? match.superOver.firstInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2"
+        : match.superOver.secondInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2";
+
+    const bowlerId =
+      inning === 1
+        ? match.superOver.firstInning.bowler
+        : match.superOver.secondInning.bowler;
+
+    const bowlerIndex = match[bowlerTeamKey].findIndex(
+      (p) => p._id.toString() === bowlerId,
+    );
+    if (bowlerIndex !== -1) {
+      match[bowlerTeamKey][bowlerIndex].wicketsTaken =
+        (match[bowlerTeamKey][bowlerIndex].wicketsTaken || 0) + 1;
+      if (!match[bowlerTeamKey][bowlerIndex].ballsBowled) {
+        match[bowlerTeamKey][bowlerIndex].ballsBowled = [];
+      }
+      match[bowlerTeamKey][bowlerIndex].ballsBowled.push("W");
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Wicket updated",
+      superOver: match.superOver,
+    });
+  } catch (error) {
+    console.error("Error updating super over wicket:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post("/updateSuperOverByes", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, team, byes, inning } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    if (!match.superOver || match.superOver.isComplete) {
+      return res.status(400).json({
+        success: false,
+        message: "Super Over not started or already complete",
+      });
+    }
+
+    // Update the correct inning
+    const inningData =
+      inning === 1 ? match.superOver.firstInning : match.superOver.secondInning;
+
+    if (inningData.ballsBowled >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Inning already complete (6 balls bowled)",
+      });
+    }
+
+    inningData.runs += byes;
+    inningData.ballsBowled += 1;
+    inningData.balls.push(`${byes}B`);
+
+    // Update bowler stats (just mark the ball bowled)
+    const bowlerTeamKey =
+      inning === 1
+        ? match.superOver.firstInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2"
+        : match.superOver.secondInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2";
+
+    const bowlerId =
+      inning === 1
+        ? match.superOver.firstInning.bowler
+        : match.superOver.secondInning.bowler;
+
+    const bowlerIndex = match[bowlerTeamKey].findIndex(
+      (p) => p._id.toString() === bowlerId,
+    );
+    if (bowlerIndex !== -1) {
+      if (!match[bowlerTeamKey][bowlerIndex].ballsBowled) {
+        match[bowlerTeamKey][bowlerIndex].ballsBowled = [];
+      }
+      match[bowlerTeamKey][bowlerIndex].ballsBowled.push(`${byes}B`);
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Byes updated",
+      superOver: match.superOver,
+    });
+  } catch (error) {
+    console.error("Error updating super over byes:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post("/updateSuperOverExtras", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, team, extraType, inning } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    if (!match.superOver || match.superOver.isComplete) {
+      return res.status(400).json({
+        success: false,
+        message: "Super Over not started or already complete",
+      });
+    }
+
+    // Update the correct inning
+    const inningData =
+      inning === 1 ? match.superOver.firstInning : match.superOver.secondInning;
+
+    if (inningData.ballsBowled >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Inning already complete (6 balls bowled)",
+      });
+    }
+
+    const extraValue = extraType === "Wide" ? "WD" : "NB";
+    inningData.runs += 1; // 1 run for extras
+    inningData.balls.push(extraValue);
+
+    // For wides and no-balls, we don't increment ballsBowled
+    if (extraType !== "Wide" && extraType !== "NB") {
+      inningData.ballsBowled += 1;
+    }
+
+    // Update bowler stats
+    const bowlerTeamKey =
+      inning === 1
+        ? match.superOver.firstInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2"
+        : match.superOver.secondInning.bowlingTeam === match.team1
+          ? "nominationsT1"
+          : "nominationsT2";
+
+    const bowlerId =
+      inning === 1
+        ? match.superOver.firstInning.bowler
+        : match.superOver.secondInning.bowler;
+
+    const bowlerIndex = match[bowlerTeamKey].findIndex(
+      (p) => p._id.toString() === bowlerId,
+    );
+    if (bowlerIndex !== -1) {
+      if (!match[bowlerTeamKey][bowlerIndex].ballsBowled) {
+        match[bowlerTeamKey][bowlerIndex].ballsBowled = [];
+      }
+      match[bowlerTeamKey][bowlerIndex].ballsBowled.push(extraValue);
+      match[bowlerTeamKey][bowlerIndex].runsConceded =
+        (match[bowlerTeamKey][bowlerIndex].runsConceded || 0) + 1;
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Extras updated",
+      superOver: match.superOver,
+    });
+  } catch (error) {
+    console.error("Error updating super over extras:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post("/completeSuperOver", authenticateJWT, async (req, res) => {
+  try {
+    const {
+      matchId,
+      winner,
+      team1Runs,
+      team2Runs,
+      team1Wickets,
+      team2Wickets,
+    } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Match not found" });
+    }
+
+    if (!match.superOver) {
+      return res.status(400).json({
+        success: false,
+        message: "Super Over not started",
+      });
+    }
+
+    // Update super over results
+    match.superOver.firstInning.runs = team1Runs;
+    match.superOver.firstInning.wickets = team1Wickets;
+    match.superOver.secondInning.runs = team2Runs;
+    match.superOver.secondInning.wickets = team2Wickets;
+    match.superOver.winner = winner;
+    match.superOver.isComplete = true;
+
+    match.winner = winner;
+
+    // Update match result
+    if (winner !== "Match Tied") {
+      match.result = winner;
+    } else {
+      match.result = "Tied";
+    }
+
+    match.status = "recent";
+
+    // Reset all player statuses to "Playing"
+    match.nominationsT1.forEach((player) => {
+      player.playingStatus = "Playing";
+    });
+    match.nominationsT2.forEach((player) => {
+      player.playingStatus = "Playing";
+    });
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Super Over completed",
+      match,
+    });
+  } catch (error) {
+    console.error("Error completing super over:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 module.exports = router;
