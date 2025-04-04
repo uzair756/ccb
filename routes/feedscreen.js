@@ -76,6 +76,30 @@ router.get('/recentmatches', async (req, res) => {
   }
 });
 
+// Get final match result for a sport and year
+router.get('/finalwinner', async (req, res) => {
+  const { sportCategory, year } = req.query;
+
+  if (!sportCategory || !year) {
+    return res.status(400).json({ success: false, message: 'Sport category and year are required' });
+  }
+
+  try {
+    const ScheduleModel = createScheduleModel(sportCategory);
+    const finalMatch = await ScheduleModel.findOne({ pool: 'final', year });
+
+    if (finalMatch && finalMatch.result) {
+      return res.json({ success: true, winner: finalMatch.result });
+    } else {
+      return res.json({ success: true, winner: null });
+    }
+  } catch (error) {
+    console.error('Error fetching final match:', error);
+    res.status(500).json({ success: false, message: 'Error fetching final match' });
+  }
+});
+
+
 
 // router.get('/livematches', async (req, res) => {
 //   const { sportCategory } = req.query; // Get the sport category from the query params
