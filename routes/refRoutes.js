@@ -386,33 +386,86 @@ router.get("/refmatches", authenticateJWT, async (req, res) => {
 router.post("/createSemiFinalMatch", authenticateJWT, async (req, res) => {
   try {
     const { team1, team2, pool, year } = req.body;
-    const sport = req.user.sportscategory; // Get the logged-in user's sport category
+    const sport = req.user.sportscategory;
 
+    // Validate required fields
     if (!team1 || !team2 || !pool || !year || !sport) {
-      return res
-        .status(400)
-        .json({ success: false, message: "All fields are required." });
+      return res.status(400).json({ 
+        success: false, 
+        message: "All fields are required." 
+      });
     }
 
-    const ScheduleModel = createScheduleModel(sport); // Get dynamic model
+    // Validate pool type
+    if (!['semi', 'final'].includes(pool)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid pool type. Must be 'semi' or 'final'." 
+      });
+    }
 
+    const ScheduleModel = createScheduleModel(sport);
     if (!ScheduleModel) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid sport category." });
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid sport category." 
+      });
+    }
+
+    // Check for existing final match for this sport and year
+    if (pool === 'final') {
+      const existingFinal = await ScheduleModel.findOne({ 
+        sport, 
+        year, 
+        pool: 'final' 
+      });
+      
+      if (existingFinal) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Final match already exists for this sport and year." 
+        });
+      }
+    }
+
+    // Check for existing semi matches for this sport and year
+    if (pool === 'semi') {
+      const existingSemis = await ScheduleModel.find({ 
+        sport, 
+        year, 
+        pool: 'semi' 
+      });
+      
+      if (existingSemis.length >= 2) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Maximum of 2 semi-final matches already exist for this sport and year." 
+        });
+      }
+
+      // Check if this exact match already exists
+      const existingMatch = await ScheduleModel.findOne({
+        $or: [
+          { team1, team2, sport, year, pool: 'semi' },
+          { team1: team2, team2: team1, sport, year, pool: 'semi' }
+        ]
+      });
+      
+      if (existingMatch) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "This semi-final match already exists." 
+        });
+      }
     }
 
     // Fetch nominations for both teams
-    const team1Nominations = await PlayerNominationForm.findOne({
-      department: team1,
-      sport,
-    });
-    const team2Nominations = await PlayerNominationForm.findOne({
-      department: team2,
-      sport,
-    });
+    const [team1Nominations, team2Nominations] = await Promise.all([
+      PlayerNominationForm.findOne({ department: team1, sport, year }),
+      PlayerNominationForm.findOne({ department: team2, sport, year })
+    ]);
 
-    // Create a new semi-final match with nominations
+    // Create new match
     const newMatch = new ScheduleModel({
       team1,
       team2,
@@ -425,16 +478,18 @@ router.post("/createSemiFinalMatch", authenticateJWT, async (req, res) => {
     });
 
     await newMatch.save();
+    
     res.json({
       success: true,
-      message:
-        "Semi-final and final matches created successfully with nominations.",
+      message: "Match created successfully with nominations.",
+      match: newMatch
     });
   } catch (error) {
     console.error("Error creating match:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Server error while creating match." });
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error while creating match." 
+    });
   }
 });
 
