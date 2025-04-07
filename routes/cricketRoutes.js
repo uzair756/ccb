@@ -2301,12 +2301,11 @@ router.post("/updateExtrasCricket", authenticateJWT, async (req, res) => {
       });
     }
 
-    // Add extra in the correct inning, WITHOUT changing overs
-    const extraValue = extraType === "Wide" ? "WD" : "NB";
+    // Add the extra type in the correct inning
     if (match.inning === 1) {
-      match.runsInning1.push(extraValue);
+      match.runsInning1.push(extraType);  // Can be "Wide", "NB", "1E", "2E", etc.
     } else if (match.inning === 2) {
-      match.runsInning2.push(extraValue);
+      match.runsInning2.push(extraType);  // Can be "Wide", "NB", "1E", "2E", etc.
     }
 
     // Identify the bowling team
@@ -2327,7 +2326,7 @@ router.post("/updateExtrasCricket", authenticateJWT, async (req, res) => {
         `✅ Active bowler found: ${activeBowler.name}, updating balls bowled...`,
       );
       if (!activeBowler.ballsBowled) activeBowler.ballsBowled = [];
-      activeBowler.ballsBowled.push(extraValue);
+      activeBowler.ballsBowled.push(extraType);  // Add the extra as part of the bowler's balls bowled
     } else {
       console.log("❌ No active bowler found in the bowling team.");
     }
@@ -2340,6 +2339,7 @@ router.post("/updateExtrasCricket", authenticateJWT, async (req, res) => {
   }
 });
 
+
 router.post(
   "/updateExtrasCricket2ndInning",
   authenticateJWT,
@@ -2347,13 +2347,13 @@ router.post(
     try {
       const { matchId, team, extraType } = req.body;
       const sportCategory = req.user.sportscategory;
-
+  
       if (!matchId || !team || !extraType) {
         return res
           .status(400)
           .json({ success: false, message: "Invalid request data." });
       }
-
+  
       const ScheduleModel = createScheduleModel(sportCategory);
       const match = await ScheduleModel.findById(matchId);
       if (!match) {
@@ -2361,7 +2361,7 @@ router.post(
           .status(404)
           .json({ success: false, message: "Match not found." });
       }
-
+  
       // Determine which team is batting
       if (
         match.SecondInningBattingTeam.toString().trim() ===
@@ -2376,21 +2376,20 @@ router.post(
       } else {
         return res.status(400).json({
           success: false,
-          message: "Invalid FirstInningBattingTeam value.",
+          message: "Invalid SecondInningBattingTeam value.",
         });
       }
-
-      // Add extra in the correct inning, WITHOUT changing overs
-      const extraValue = extraType === "Wide" ? "WD" : "NB";
+  
+      // Add the extra type in the correct inning
       if (match.inning === 1) {
-        match.runsInning1.push(extraValue);
+        match.runsInning1.push(extraType);  // Can be "Wide", "NB", "1E", "2E", etc.
       } else if (match.inning === 2) {
-        match.runsInning2.push(extraValue);
+        match.runsInning2.push(extraType);  // Can be "Wide", "NB", "1E", "2E", etc.
       }
-
+  
       // Identify the bowling team
       const bowlingTeamKey =
-        match.SecondInningBattingTeam.toString().trim() ===
+        match.FirstInningBattingTeam.toString().trim() ===
         match.team1.toString().trim()
           ? "team2"
           : "team1";
@@ -2399,32 +2398,25 @@ router.post(
       const activeBowler = bowlingTeam.find(
         (player) => player.playingStatus === "ActiveBowler",
       );
-
+  
       // If an active bowler exists, update their balls bowled with the extra value
       if (activeBowler) {
         console.log(
           `✅ Active bowler found: ${activeBowler.name}, updating balls bowled...`,
         );
         if (!activeBowler.ballsBowled) activeBowler.ballsBowled = [];
-        activeBowler.ballsBowled.push(extraValue);
+        activeBowler.ballsBowled.push(extraType);  // Add the extra as part of the bowler's balls bowled
       } else {
         console.log("❌ No active bowler found in the bowling team.");
       }
-
+  
       await match.save();
-      res.json({
-        success: true,
-        message: "Extras updated successfully!",
-        match,
-      });
+      res.json({ success: true, message: "Extras updated successfully!", match });
     } catch (error) {
       console.error("Error updating extras:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Internal server error." });
+      res.status(500).json({ success: false, message: "Internal server error." });
     }
-  },
-);
+  });
 
 const updateOvers = (currentOvers) => {
   let [whole, decimal] = currentOvers.toString().split(".").map(Number);
@@ -3410,6 +3402,408 @@ router.get("/bestcricketertp/:year", async (req, res) => {
   }
 });
 
+
+
+router.post("/handleRunOutWithRuns", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, outgoingBatsmanId, newBatsmanId, runs, team } = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+
+    if (!matchId || !outgoingBatsmanId || !newBatsmanId || runs === undefined || !team || !ScheduleModel) {
+      return res.status(400).json({ success: false, message: "Invalid data." });
+    }
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: "Match not found." });
+    }
+
+    // Update outgoing batsman
+    const updateOutgoingBatsman = (players, id) => {
+      const player = players.find(p => p._id.equals(id));
+      if (player) {
+        player.runsScored = (player.runsScored || 0) + runs;
+        player.ballsFaced.push(runs.toString());
+        player.playingStatus = "Out";
+      }
+    };
+
+    // Update team score
+    if (team === match.team1.toString().trim()) {
+      match.scoreT1 += runs;
+      match.T1wickets += 1;
+      updateOutgoingBatsman(match.nominationsT1, outgoingBatsmanId);
+      
+      // Update new batsman
+      const newBatsman = match.nominationsT1.find(p => p._id.equals(newBatsmanId));
+      if (newBatsman) newBatsman.playingStatus = "ActiveBatsman";
+      
+      // Update bowler stats
+      const bowler = match.nominationsT2.find(p => p.playingStatus === "ActiveBowler");
+      if (bowler) {
+        // bowler.wicketsTaken = (bowler.wicketsTaken || 0) + 1;
+        bowler.ballsBowled.push(`W${runs}`); // Special notation for run out with runs
+      }
+    } else if (team === match.team2.toString().trim()) {
+      match.scoreT2 += runs;
+      match.T2wickets += 1;
+      updateOutgoingBatsman(match.nominationsT2, outgoingBatsmanId);
+      
+      // Update new batsman
+      const newBatsman = match.nominationsT2.find(p => p._id.equals(newBatsmanId));
+      if (newBatsman) newBatsman.playingStatus = "ActiveBatsman";
+      
+      // Update bowler stats
+      const bowler = match.nominationsT1.find(p => p.playingStatus === "ActiveBowler");
+      if (bowler) {
+        // bowler.wicketsTaken = (bowler.wicketsTaken || 0) + 1;
+        bowler.ballsBowled.push(`W${runs}`); // Special notation for run out with runs
+      }
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid team." });
+    }
+
+    // Update innings data
+    const runOutNotation = `W${runs}`;
+    if (match.inning === 1) {
+      match.runsInning1.push(runOutNotation);
+      match.oversInning1 = updateOvers(match.oversInning1);
+    } else if (match.inning === 2) {
+      match.runsInning2.push(runOutNotation);
+      match.oversInning2 = updateOvers(match.oversInning2);
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "Run out with runs recorded successfully!",
+      match
+    });
+  } catch (error) {
+    console.error("Error in handleRunOutWithRuns:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+});
+
+router.post("/handleAllOutWithRuns", authenticateJWT, async (req, res) => {
+  try {
+    const { matchId, outgoingBatsmanId, runs, team ,matchyear} = req.body;
+    const ScheduleModel = createScheduleModel(req.user.sportscategory);
+    const sportCategory = req.user.sportscategory;
+
+    if (!matchId || !outgoingBatsmanId || runs === undefined || !team || !ScheduleModel) {
+      return res.status(400).json({ success: false, message: "Invalid data." });
+    }
+
+    const match = await ScheduleModel.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: "Match not found." });
+    }
+
+    // Update outgoing batsman
+    const updateOutgoingBatsman = (players, id) => {
+      const player = players.find(p => p._id.equals(id));
+      if (player) {
+        player.runsScored = (player.runsScored || 0) + runs;
+        player.ballsFaced.push(runs.toString());
+        // player.playingStatus = "Out"; // Leaving this commented out for now
+      }
+    };
+
+    // Update team score
+    if (team === match.team1.toString().trim()) {
+      match.scoreT1 += runs;
+      match.T1wickets += 1;
+      updateOutgoingBatsman(match.nominationsT1, outgoingBatsmanId);
+      
+      // Update bowler stats
+      const bowler = match.nominationsT2.find(p => p.playingStatus === "ActiveBowler");
+      if (bowler) {
+        // bowler.wicketsTaken = (bowler.wicketsTaken || 0) + 1;
+        bowler.ballsBowled.push(`W${runs}`);
+      }
+    } else if (team === match.team2.toString().trim()) {
+      match.scoreT2 += runs;
+      match.T2wickets += 1;
+      updateOutgoingBatsman(match.nominationsT2, outgoingBatsmanId);
+      
+      // Update bowler stats
+      const bowler = match.nominationsT1.find(p => p.playingStatus === "ActiveBowler");
+      if (bowler) {
+        // bowler.wicketsTaken = (bowler.wicketsTaken || 0) + 1;
+        bowler.ballsBowled.push(`W${runs}`);
+      }
+    }
+
+    // If all-out occurs in first innings, increment to inning 2
+if (match.inning === 1) {
+  match.inning += 1;
+  console.log("First inning over! Inning incremented to:", match.inning);
+
+  // Update playingStatus inside nominationsT1 and nominationsT2 for the first inning
+  match.nominationsT1.forEach((player) => {
+    if (
+      player.playingStatus === "ActiveBatsman" ||
+      player.playingStatus === "ActiveBowler" ||
+      player.playingStatus === "Out"
+    ) {
+      player.playingStatus = "Playing";
+    }
+  });
+
+  match.nominationsT2.forEach((player) => {
+    if (
+      player.playingStatus === "ActiveBatsman" ||
+      player.playingStatus === "ActiveBowler" ||
+      player.playingStatus === "Out"
+    ) {
+      player.playingStatus = "Playing";
+    }
+  });
+} else if (match.inning === 2) {
+  // If it's the second inning, don't increment inning value but update player statuses
+  console.log("Inning 2 started. Updating player statuses.");
+
+  match.nominationsT1.forEach((player) => {
+    if (
+      player.playingStatus === "ActiveBatsman" ||
+      player.playingStatus === "ActiveBowler" ||
+      player.playingStatus === "Out"
+    ) {
+      player.playingStatus = "Playing";
+    }
+  });
+
+  match.nominationsT2.forEach((player) => {
+    if (
+      player.playingStatus === "ActiveBatsman" ||
+      player.playingStatus === "ActiveBowler" ||
+      player.playingStatus === "Out"
+    ) {
+      player.playingStatus = "Playing";
+    }
+  });
+}
+
+
+    // Update innings data
+    const runOutNotation = `W${runs}`;
+    if (match.inning === 1) {
+      // match.runsInning1.push(runOutNotation);
+      match.oversInning1 = updateOvers(match.oversInning1);
+    } else if (match.inning === 2) {
+      // match.runsInning2.push(runOutNotation);
+      match.oversInning2 = updateOvers(match.oversInning2);
+    }
+
+
+    match.status = "recent";
+    let winningTeam = null;
+
+    if (match.scoreT1 > match.scoreT2) {
+      match.result = match.team1;
+      winningTeam = match.team1;
+    } else if (match.scoreT2 > match.scoreT1) {
+      match.result = match.team2;
+      winningTeam = match.team2;
+    } else {
+      match.result = "Draw";
+    }
+
+    // Play-off Logic
+    if (match.pool === "play-off" && winningTeam) {
+      console.log(
+        "Play-off match detected. Updating TBD entries with nominations...",
+      );
+      const winnerNominations = await PlayerNominationForm.findOne({
+        department: winningTeam,
+        sport: sportCategory,
+        year: matchyear
+      });
+
+      const updateResult = await ScheduleModel.updateMany(
+        {
+          year: match.year,
+          $or: [{ team1: "TBD" }, { team2: "TBD" }],
+        },
+        [
+          {
+            $set: {
+              team1: {
+                $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"],
+              },
+              team2: {
+                $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"],
+              },
+              nominationsT1: {
+                $cond: [
+                  { $eq: ["$team1", "TBD"] },
+                  winnerNominations?.nominations || [],
+                  "$nominationsT1",
+                ],
+              },
+              nominationsT2: {
+                $cond: [
+                  { $eq: ["$team2", "TBD"] },
+                  winnerNominations?.nominations || [],
+                  "$nominationsT2",
+                ],
+              },
+            },
+          },
+        ],
+      );
+      console.log("TBD & Nominations Update Result:", updateResult);
+    } else if (match.pool === "final" && sportCategory === "Cricket") {
+      console.log(
+        "Fetching nominated players from PlayerNominationForm for Cricket...",
+      );
+
+      // Fetch all nominated players for Cricket
+      const allNominations = await PlayerNominationForm.find({
+        sport: "Cricket",
+        year: matchyear,
+      }).select("nominations");
+
+      console.log("Total nomination entries found:", allNominations.length);
+
+      // Extract only required player details
+      const allPlayers = allNominations.flatMap((team) =>
+        team.nominations.map((player) => ({
+          name: player.name,
+          regNo: player.regNo,
+          section: player.section,
+          cnic: player.cnic,
+        })),
+      );
+
+      console.log("Total Players Extracted:", allPlayers.length);
+
+      const bulkOperations = allPlayers.map((player) => ({
+        updateOne: {
+          filter: { year: matchyear }, // Ensure we're updating only the doc for this year
+          update: {
+            $setOnInsert: { year: matchyear }, // Set year only if this is a new document
+            $push: {
+              nominations: {
+                name: player.name,
+                regNo: player.regNo,
+                section: player.section,
+                cnic: player.cnic,
+                shirtNo: player.shirtNo || "", // Optional, if shirtNo exists
+                totalrunsScored: 0,
+                totalballsfaced: 0,
+                totalwicketstaken: 0,
+                totalrunsconceeded: 0,
+              },
+            },
+          },
+          upsert: true, // Create the doc if it doesn't exist
+        },
+      }));
+
+      // Execute bulk update
+      if (bulkOperations.length > 0) {
+        await BestCricketer.bulkWrite(bulkOperations);
+        console.log("All nominated players pushed to BestCricketer.");
+      } else {
+        console.log("No players to update.");
+      }
+
+      const ScheduleModel = createScheduleModel(sportCategory);
+      const allMatches = await ScheduleModel.find({year: matchyear}).select(
+        "nominationsT1 nominationsT2",
+      );
+
+      // Get all players in BestCricketer
+      const bestCricketers = await BestCricketer.findOne({year:matchyear});
+      if (!bestCricketers) {
+        console.log("No best cricketers found, skipping update.");
+        return;
+      }
+
+      for (const player of bestCricketers.nominations) {
+        let totalRuns = 0;
+        let totalWickets = 0;
+        let totalBallsFaced = 0;
+        let totalRunsConceded = 0;
+
+        // Search player in nominationsT1 & nominationsT2
+        for (const match of allMatches) {
+          const foundInT1 = match.nominationsT1.filter(
+            (p) => p.regNo === player.regNo,
+          );
+          const foundInT2 = match.nominationsT2.filter(
+            (p) => p.regNo === player.regNo,
+          );
+
+          // Add runs scored from both teams
+          foundInT1.forEach((p) => (totalRuns += p.runsScored));
+          foundInT2.forEach((p) => (totalRuns += p.runsScored));
+
+          // Add wickets taken from both teams
+          foundInT1.forEach((p) => (totalWickets += p.wicketsTaken));
+          foundInT2.forEach((p) => (totalWickets += p.wicketsTaken));
+
+          // Calculate total balls faced (length of ballsFaced array)
+          foundInT1.forEach(
+            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
+          );
+          foundInT2.forEach(
+            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
+          );
+
+          // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
+          const processBallsBowled = (ballsArray) => {
+            return ballsArray.reduce((sum, ball) => {
+              if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
+              if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
+              return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
+            }, 0);
+          };
+
+          foundInT1.forEach(
+            (p) =>
+              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
+          );
+          foundInT2.forEach(
+            (p) =>
+              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
+          );
+        }
+
+        // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
+        await BestCricketer.updateOne(
+          { "nominations.regNo": player.regNo },
+          {
+            $set: {
+              "nominations.$.totalrunsScored": totalRuns,
+              "nominations.$.totalwicketstaken": totalWickets,
+              "nominations.$.totalballsfaced": totalBallsFaced,
+              "nominations.$.totalrunsconceeded": totalRunsConceded,
+            },
+          },
+        );
+
+        console.log(
+          `Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`,
+        );
+      }
+
+      console.log("All players' stats updated in BestCricketer.");
+    }
+
+    await match.save();
+    res.json({
+      success: true,
+      message: "All out with runs recorded successfully! and innings successfully ended",
+      match
+    });
+  } catch (error) {
+    console.error("Error in handleAllOutWithRuns:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+});
 
 
 
