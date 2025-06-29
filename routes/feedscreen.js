@@ -5,11 +5,37 @@ const router = express.Router();
 // Get all posts (no authentication required)
 router.get('/getadminposts', async (req, res) => {
   try {
-    const posts = await AdminPost.find().sort({ postedAt: -1 }); // Sort by date, descending
-    res.json({ success: true, posts });
+    const posts = await AdminPost.find().sort({ postedAt: -1 });
+    
+    // Return posts without modifying image data
+    res.json({ 
+      success: true, 
+      posts: posts.map(post => ({
+        ...post._doc,
+        // Don't include binary data in the initial response
+        adminimagepost: post.adminimagepost ? true : false
+      }))
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Failed to fetch posts' });
+  }
+});
+
+// Get image for a specific post
+router.get('/adminpost/image/:id', async (req, res) => {
+  try {
+    const post = await AdminPost.findById(req.params.id);
+    
+    if (!post || !post.adminimagepost || !post.adminimagepost.data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.set('Content-Type', post.adminimagepost.contentType);
+    res.send(post.adminimagepost.data);
+  } catch (error) {
+    console.error('Error fetching image:', error);
+    res.status(500).json({ error: 'Error fetching image' });
   }
 });
 

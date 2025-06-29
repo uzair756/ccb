@@ -1684,27 +1684,6 @@ router.post("/stopmatchcricket", authenticateJWT, async (req, res) => {
 
       console.log("Total Players Extracted:", allPlayers.length);
 
-      // // Prepare bulk operations (just pushing into nominations array without checking)
-      // const bulkOperations = allPlayers.map((player) => ({
-      //   updateOne: {
-      //     filter: {}, // No filtering condition, just push
-      //     update: {
-      //       $push: {
-      //         nominations: {
-      //           name: player.name,
-      //           regNo: player.regNo,
-      //           section: player.section,
-      //           cnic: player.cnic,
-      //           totalrunsScored: 0,
-      //           totalballsfaced: 0,
-      //           totalwicketstaken: 0,
-      //           totalrunsconceeded: 0,
-      //         },
-      //       },
-      //     },
-      //     upsert: true, // Create if doesn't exist
-      //   },
-      // }));
       const bulkOperations = allPlayers.map((player) => ({
         updateOne: {
           filter: { year: matchyear }, // Ensure we're updating only the doc for this year

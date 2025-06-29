@@ -36,14 +36,28 @@ const repSchema = new mongoose.Schema({
   department: { type: String, unique: true }, // Ensure one rep per department
 });
 
-const admingpostSchema = new mongoose.Schema({
+// const admingpostSchema = new mongoose.Schema({
+//   adminpostdescription: String,
+//   adminimagepost: String,
+//   adminpostuserId: { type: mongoose.Schema.Types.ObjectId, ref: "DSAUser" },
+//   adminpostusername: String,
+//   adminpostemail: String,
+//   postedAt: { type: Date, default: Date.now },
+// });
+const adminpostSchema = new mongoose.Schema({
   adminpostdescription: String,
-  adminimagepost: String,
+  adminimagepost: {
+    data: Buffer,
+    contentType: String
+  },
   adminpostuserId: { type: mongoose.Schema.Types.ObjectId, ref: "DSAUser" },
   adminpostusername: String,
   adminpostemail: String,
   postedAt: { type: Date, default: Date.now },
 });
+
+
+
 // Sports Rules Schema
 const sportsRulesSchema = new mongoose.Schema({
   sport: { type: String, unique: true, required: true },
@@ -87,6 +101,45 @@ const bestCricketerSchema = new mongoose.Schema({
       totalballsfaced: { type: Number, default: 0 }, // Total runs scored
       totalwicketstaken: { type: Number, default: 0 }, // Total runs scored
       totalrunsconceeded: { type: Number, default: 0 }, // Total runs scored
+    },
+  ],
+});
+const bestFootballPlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalgoalsscored: { type: Number, default: 0 }, // Total goals scored
+    },
+  ],
+});
+const bestFutsalPlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalgoalsscored: { type: Number, default: 0 }, // Total goals scored
+    },
+  ],
+});
+const bestBasketballPlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
     },
   ],
 });
@@ -777,7 +830,7 @@ const CoordinatorUser = mongoose.model("CoordinatorUser", coordinatorSchema);
 const RepUser = mongoose.model("RepUser", repSchema);
 const RefUser = mongoose.model("RefUser", refSchema);
 const CaptainUser = mongoose.model("CaptainUser", captainSchema);
-const AdminPost = mongoose.model("AdminPost", admingpostSchema);
+const AdminPost = mongoose.model("AdminPost", adminpostSchema);
 const SportsRules = mongoose.model("SportsRules", sportsRulesSchema);
 const PlayerNominationForm = mongoose.model(
   "PlayerNominationForm",
@@ -787,6 +840,9 @@ const TrialEvent = mongoose.model("TrialEvent", trialEventSchema);
 const TeamRankings = mongoose.model("TeamRankings", rankingSchema);
 const Pools = mongoose.model("Pools", poolsSchema);
 const BestCricketer = mongoose.model("BestCricketer", bestCricketerSchema);
+const BestFootballPlayer = mongoose.model("BestFootballPlayer", bestFootballPlayerSchema);
+const BestFutsalPlayer = mongoose.model("BestFutsalPlayer", bestFutsalPlayerSchema);
+const BestBasketballPlayer = mongoose.model("BestBasketballPlayer", bestBasketballPlayerSchema);
 // const Schedules = mongoose.model("Schedules", schedulesSchema);
 // Function to create the correct model dynamically
 
@@ -816,5 +872,8 @@ module.exports = {
   createScheduleModel,
   RefUser,
   BestCricketer,
+  BestFootballPlayer,
+  BestFutsalPlayer,
+  BestBasketballPlayer,
 };
 // Schedules (to be added in module.exports)

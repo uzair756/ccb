@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { DSAUser,AdminPost } = require('../models');
 const authenticateJWT = require('../middleware');
 const config = require('../config');
+const upload = require('./multerConfig');
 
 const router = express.Router();
 
@@ -51,47 +52,105 @@ router.get('/dsalandingpage', authenticateJWT, async (req, res) => {
 
 
 
-router.post('/adminpost', authenticateJWT, async (req, res) => {
-  const { adminpostdescription, adminimagepost } = req.body; // Receive post data
-  const { username, email, id } = req.user; // Get user info from JWT
+// router.post('/adminpost', authenticateJWT, async (req, res) => {
+//   const { adminpostdescription, adminimagepost } = req.body; // Receive post data
+//   const { username, email, id } = req.user; // Get user info from JWT
   
+//   try {
+//     const newPost = new AdminPost({
+//       adminpostdescription,
+//       adminimagepost,
+//       adminpostuserId:id,
+//       adminpostusername: username,
+//       adminpostemail: email,
+//     });
+
+//     const savedPost = await newPost.save();
+//     res.status(201).json({ success: true, message: 'Post created successfully', post: savedPost });
+//   } catch (error) {
+//     console.error('Error creating post:', error);
+//     res.status(500).json({ error: 'Error creating post' });
+//   }
+// });
+
+// Create admin post with image upload
+router.post('/adminpost', authenticateJWT, upload.single('adminimagepost'), async (req, res) => {
+  const { adminpostdescription } = req.body;
+  const { username, email, id } = req.user;
+
   try {
     const newPost = new AdminPost({
       adminpostdescription,
-      adminimagepost,
-      adminpostuserId:id,
+      adminimagepost: req.file ? {
+        data: req.file.buffer,
+        contentType: req.file.mimetype
+      } : null,
+      adminpostuserId: id,
       adminpostusername: username,
       adminpostemail: email,
     });
 
     const savedPost = await newPost.save();
-    res.status(201).json({ success: true, message: 'Post created successfully', post: savedPost });
+    res.status(201).json({ 
+      success: true, 
+      message: 'Post created successfully', 
+      post: savedPost 
+    });
   } catch (error) {
     console.error('Error creating post:', error);
     res.status(500).json({ error: 'Error creating post' });
   }
 });
 
-
-
-
-
-router.put('/adminpost/:id', authenticateJWT, async (req, res) => {
-  const { id } = req.params;
-  const { adminpostdescription, adminimagepost } = req.body;
-
+// Get image for a post
+router.get('/adminpost/image/:id', async (req, res) => {
   try {
-    const updatedPost = await AdminPost.findOneAndUpdate(
-      { _id: id, adminpostuserId: req.user.id }, // Ensure the user can only update their own posts
-      { adminpostdescription, adminimagepost },
-      { new: true } // Return the updated document
+    const post = await AdminPost.findById(req.params.id);
+    
+    if (!post || !post.adminimagepost || !post.adminimagepost.data) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    res.set('Content-Type', post.adminimagepost.contentType);
+    res.send(post.adminimagepost.data);
+  } catch (error) {
+    console.error('Error fetching image:', error);
+    res.status(500).json({ error: 'Error fetching image' });
+  }
+});
+
+
+
+// Update admin post with image handling
+router.put('/adminpost/:id', authenticateJWT, upload.single('adminimagepost'), async (req, res) => {
+  try {
+    const { adminpostdescription, removeImage } = req.body;
+    const updateData = { adminpostdescription };
+
+    if (req.file) {
+      updateData.adminimagepost = {
+        data: req.file.buffer,
+        contentType: req.file.mimetype
+      };
+    } else if (removeImage === 'true') {
+      updateData.adminimagepost = null;
+    }
+
+    const updatedPost = await AdminPost.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
     );
 
     if (!updatedPost) {
-      return res.status(404).json({ error: 'Post not found or unauthorized' });
+      return res.status(404).json({ error: 'Post not found' });
     }
 
-    res.json({ success: true, message: 'Post updated successfully', updatedPost });
+    res.json({ 
+      success: true, 
+      message: 'Post updated successfully', 
+      updatedPost 
+    });
   } catch (error) {
     console.error('Error updating post:', error);
     res.status(500).json({ error: 'Error updating post' });
