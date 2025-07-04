@@ -191,6 +191,39 @@ const rankingSchema = new mongoose.Schema({
   P8: String,
 });
 
+const departmentSchema = new mongoose.Schema({
+  teams: {
+    type: [String],
+    required: true,
+    validate: {
+      validator: function(teams) {
+        // Validate each team is uppercase alphabets only
+        return teams.every(team => /^[A-Z]+$/.test(team));
+      },
+      message: props => `${props.value} contains invalid team names. Only uppercase alphabets are allowed.`
+    }
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+departmentSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  
+  // Ensure all team names are uppercase before saving
+  if (this.teams && this.isModified('teams')) {
+    this.teams = this.teams.map(team => team.toUpperCase());
+  }
+  
+  next();
+});
+
 const poolsSchema = new mongoose.Schema({
   sport: { type: String, required: true },
   poolA: [String], // Teams in Pool A
@@ -226,6 +259,11 @@ const getScheduleSchema = (sport) => {
     result: { type: String, default: null },
     status: { type: String, default: "upcoming" },
     year: { type: String, required: true },
+    matchDate: { type: Date, default: null },
+    matchTime: { type: String, default: null },
+    venue: { type: String, default: null },
+    updatedBy: { type: String, default: null },
+    lastUpdated: { type: Date, default: null }
   };
 
   if (sport === "Football") {
@@ -843,6 +881,7 @@ const BestCricketer = mongoose.model("BestCricketer", bestCricketerSchema);
 const BestFootballPlayer = mongoose.model("BestFootballPlayer", bestFootballPlayerSchema);
 const BestFutsalPlayer = mongoose.model("BestFutsalPlayer", bestFutsalPlayerSchema);
 const BestBasketballPlayer = mongoose.model("BestBasketballPlayer", bestBasketballPlayerSchema);
+const Department = mongoose.model('Department', departmentSchema);
 // const Schedules = mongoose.model("Schedules", schedulesSchema);
 // Function to create the correct model dynamically
 
@@ -875,5 +914,6 @@ module.exports = {
   BestFootballPlayer,
   BestFutsalPlayer,
   BestBasketballPlayer,
+  Department,
 };
 // Schedules (to be added in module.exports)

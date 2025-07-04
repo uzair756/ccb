@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
-const { SportsCoachUser, SportsRules, TeamRankings, Pools, Schedules,createScheduleModel,PlayerNominationForm} = require('../models');
+const { SportsCoachUser, SportsRules, TeamRankings, Pools, Schedules,createScheduleModel,PlayerNominationForm, Department} = require('../models');
 const authenticateJWT = require('../middleware');
 const config = require('../config');
 
@@ -127,263 +127,6 @@ router.put('/updaterules/:sport', authenticateJWT, async (req, res) => {
   }
 });
 
-// Create pools and schedules
-// // Create pools and schedules
-// router.post('/create-pools', authenticateJWT, async (req, res) => {
-//   const { sport } = req.body;
-//   const user = req.user;
-//   const currentYear = new Date().getFullYear();
-//   const previousYear = currentYear - 1;
-
-//   try {
-//     // Check if pools already exist for the current year
-//     const existingPools = await Pools.findOne({ sport, year: currentYear.toString() });
-//     if (existingPools) {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Pools and schedules for ${currentYear} have already been created by ${existingPools.createdBy}.`,
-//       });
-//     }
-
-//     // Fetch team rankings from the previous year
-//     const rankings = await TeamRankings.find({ category: sport, year: previousYear.toString() }).sort({ P1: 1 });
-//     if (!rankings || rankings.length === 0) {
-//       return res.status(404).json({ success: false, message: `No team rankings found for ${sport} in ${previousYear}.` });
-//     }
-
-//     const teams = [];
-//     rankings.forEach(rank => {
-//       teams.push(rank.P1, rank.P2, rank.P3, rank.P4, rank.P5, rank.P6, rank.P7, rank.P8);
-//     });
-
-//     // Remove undefined or empty entries
-//     const validTeams = teams.filter(team => team);
-
-//     // Check for 7 teams scenario
-//     let teamsToConsider;
-//     if (validTeams.length === 7) {
-//       // Exclude the last two entries to get 5 teams
-//       teamsToConsider = validTeams.slice(0, 5);
-
-//       // Get the last team using play-off status from schedules
-//       const playOffMatch = await Schedules.findOne({ pool: 'play-off', sport }).sort({ createdAt: -1 });
-//       if (playOffMatch) {
-//         teamsToConsider.push(playOffMatch.status); // Use play-off status as the last team
-//       }
-
-//       // Add 'TBD' as the 6th team
-//       teamsToConsider.push('TBD');
-//     } else {
-//       // Default case: Consider the top 8 or less if not enough teams
-//       teamsToConsider = validTeams.slice(0, 8);
-//     }
-
-//     console.log('Teams considered for pools:', teamsToConsider);
-
-//     // Create pools manually for 7 teams scenario
-//     let poolA, poolB;
-//     if (validTeams.length === 7) {
-//       // Manually distribute teams for 7 teams (3 in Pool A, 3 in Pool B)
-//       poolA = [teamsToConsider[0], teamsToConsider[2], teamsToConsider[4]];
-//       poolB = [teamsToConsider[1], teamsToConsider[3], teamsToConsider[5]]; // Last entry as TBD
-//     } else {
-//       // Default distribution for other cases
-//       poolA = teamsToConsider.filter((_, index) => index % 2 === 0);
-//       poolB = teamsToConsider.filter((_, index) => index % 2 === 1);
-//     }
-
-//     console.log('Pool A:', poolA);
-//     console.log('Pool B:', poolB);
-
-//     // Save pools
-//     const newPools = new Pools({
-//       sport,
-//       poolA,
-//       poolB,
-//       createdBy: user.username,
-//       year: currentYear.toString(),
-//     });
-//     await newPools.save();
-
-//     // Create schedules for Pool A and Pool B
-//     const schedules = [];
-//     [poolA, poolB].forEach((pool, poolIndex) => {
-//       console.log(`Creating schedules for ${poolIndex === 0 ? 'Pool A' : 'Pool B'}`);
-//       console.log('Teams in Pool:', pool);
-
-//       for (let i = 0; i < pool.length; i++) {
-//         for (let j = i + 1; j < pool.length; j++) {
-//           const team1 = pool[i];
-//           const team2 = pool[j];
-
-//           // Only create schedule if both teams are defined
-//           if (team1 && team2) {
-//             schedules.push({
-//               pool: poolIndex === 0 ? 'Pool A' : 'Pool B',
-//               team1,
-//               team2,
-//               sport,
-//               year: currentYear.toString(),
-//               status: 'upcoming',
-//               result: null, // Default result as null
-//             });
-//           } else {
-//             console.warn('Skipping match due to undefined team:', { team1, team2 });
-//           }
-//         }
-//       }
-//     });
-
-//     // If 7 teams, create additional play-off schedule
-//     if (validTeams.length === 7) {
-//       schedules.unshift({
-//         pool: 'play-off',
-//         team1: validTeams[5], // P6
-//         team2: validTeams[6], // P7
-//         sport,
-//         year: currentYear.toString(),
-//         result: 'TBD', // Corrected to set result as TBD
-//         status: 'upcoming', // Status remains as upcoming
-//       });
-//     }
-
-//     await Schedules.insertMany(schedules);
-
-//     res.json({ success: true, message: 'Pools and schedules created successfully using the previous year\'s rankings!' });
-//   } catch (error) {
-//     console.error('Error creating pools and schedules:', error);
-//     res.status(500).json({ success: false, message: 'Error creating pools and schedules.' });
-//   }
-// });
-// Create pools and schedules
-// router.post('/create-pools', authenticateJWT, async (req, res) => {
-//   const { sport } = req.body;
-//   const user = req.user;
-//   const currentYear = new Date().getFullYear();
-//   const previousYear = currentYear - 1;
-
-//   try {
-//     // Check if pools already exist for the current year
-//     const existingPools = await Pools.findOne({ sport, year: currentYear.toString() });
-//     if (existingPools) {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Pools and schedules for ${currentYear} have already been created by ${existingPools.createdBy}.`,
-//       });
-//     }
-
-//     // Fetch team rankings from the previous year
-//     const rankings = await TeamRankings.find({ category: sport, year: previousYear.toString() }).sort({ P1: 1 });
-//     if (!rankings || rankings.length === 0) {
-//       return res.status(404).json({ success: false, message: `No team rankings found for ${sport} in ${previousYear}.` });
-//     }
-
-//     const teams = [];
-//     rankings.forEach(rank => {
-//       teams.push(rank.P1, rank.P2, rank.P3, rank.P4, rank.P5, rank.P6, rank.P7, rank.P8);
-//     });
-
-//     // Remove undefined or empty entries
-//     const validTeams = teams.filter(team => team);
-
-//     // Check for 7 teams scenario
-//     let teamsToConsider;
-//     if (validTeams.length === 7) {
-//       // Exclude the last two entries to get 5 teams
-//       teamsToConsider = validTeams.slice(0, 5);
-
-//       // Get the last team using play-off status from schedules
-//       const sportScheduleModel = createScheduleModel(sport);
-//       const playOffMatch = await sportScheduleModel.findOne({ pool: 'play-off' }).sort({ createdAt: -1 });
-//       if (playOffMatch) {
-//         teamsToConsider.push(playOffMatch.status); // Use play-off status as the last team
-//       }
-
-//       // Add 'TBD' as the 6th team
-//       teamsToConsider.push('TBD');
-//     } else {
-//       // Default case: Consider the top 8 or less if not enough teams
-//       teamsToConsider = validTeams.slice(0, 8);
-//     }
-
-//     console.log('Teams considered for pools:', teamsToConsider);
-
-//     // Create pools manually for 7 teams scenario
-//     let poolA, poolB;
-//     if (validTeams.length === 7) {
-//       // Manually distribute teams for 7 teams (3 in Pool A, 3 in Pool B)
-//       poolA = [teamsToConsider[0], teamsToConsider[2], teamsToConsider[4]];
-//       poolB = [teamsToConsider[1], teamsToConsider[3], teamsToConsider[5]]; // Last entry as TBD
-//     } else {
-//       // Default distribution for other cases
-//       poolA = teamsToConsider.filter((_, index) => index % 2 === 0);
-//       poolB = teamsToConsider.filter((_, index) => index % 2 === 1);
-//     }
-
-//     console.log('Pool A:', poolA);
-//     console.log('Pool B:', poolB);
-
-//     // Save pools
-//     const newPools = new Pools({
-//       sport,
-//       poolA,
-//       poolB,
-//       createdBy: user.username,
-//       year: currentYear.toString(),
-//     });
-//     await newPools.save();
-
-//     // Create schedules for Pool A and Pool B using the new schema
-//     const sportScheduleModel = createScheduleModel(sport);
-//     const schedules = [];
-//     [poolA, poolB].forEach((pool, poolIndex) => {
-//       console.log(`Creating schedules for ${poolIndex === 0 ? 'Pool A' : 'Pool B'}`);
-//       console.log('Teams in Pool:', pool);
-
-//       for (let i = 0; i < pool.length; i++) {
-//         for (let j = i + 1; j < pool.length; j++) {
-//           const team1 = pool[i];
-//           const team2 = pool[j];
-
-//           // Only create schedule if both teams are defined
-//           if (team1 && team2) {
-//             schedules.push({
-//               pool: poolIndex === 0 ? 'Pool A' : 'Pool B',
-//               team1,
-//               team2,
-//               sport,
-//               year: currentYear.toString(),
-//               status: 'upcoming',
-//               result: null, // Default result as null
-//             });
-//           } else {
-//             console.warn('Skipping match due to undefined team:', { team1, team2 });
-//           }
-//         }
-//       }
-//     });
-
-//     // If 7 teams, create additional play-off schedule
-//     if (validTeams.length === 7) {
-//       schedules.unshift({
-//         pool: 'play-off',
-//         team1: validTeams[5], // P6
-//         team2: validTeams[6], // P7
-//         sport,
-//         year: currentYear.toString(),
-//         result: 'TBD', // Corrected to set result as TBD
-//         status: 'upcoming', // Status remains as upcoming
-//       });
-//     }
-
-//     await sportScheduleModel.insertMany(schedules);
-
-//     res.json({ success: true, message: 'Pools and schedules created successfully using the previous year\'s rankings!' });
-//   } catch (error) {
-//     console.error('Error creating pools and schedules:', error);
-//     res.status(500).json({ success: false, message: 'Error creating pools and schedules.' });
-//   }
-// });
 router.post('/create-pools', authenticateJWT, async (req, res) => {
   const { sport } = req.body;
   const user = req.user;
@@ -391,62 +134,113 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
   const previousYear = currentYear - 1;
 
   try {
-    // Check if pools already exist for the current year
-    const existingPools = await Pools.findOne({ sport, year: currentYear.toString() });
+    // 1. Check if pools already exist
+    const existingPools = await Pools.findOne({ 
+      sport, 
+      year: currentYear.toString() 
+    });
+
     if (existingPools) {
       return res.status(400).json({
         success: false,
-        message: `Pools and schedules for ${currentYear} have already been created by ${existingPools.createdBy}.`,
+        message: `Pools already exist for ${currentYear} (created by ${existingPools.createdBy})`
       });
     }
 
-    // Fetch team rankings from the previous year
-    const rankings = await TeamRankings.find({ category: sport, year: previousYear.toString() }).sort({ P1: 1 });
+    // 2. Get available teams from Department collection
+    const department = await Department.findOne();
+    if (!department || !department.teams || department.teams.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No teams found in department configuration. Please configure departments first.'
+      });
+    }
+    const availableTeams = department.teams;
+
+    // 3. Fetch and validate team rankings
+    const rankings = await TeamRankings.find({ 
+      category: sport, 
+      year: previousYear.toString() 
+    }).sort({ P1: 1 });
+
     if (!rankings || rankings.length === 0) {
-      return res.status(404).json({ success: false, message: `No team rankings found for ${sport} in ${previousYear}.` });
+      return res.status(404).json({ 
+        success: false, 
+        message: `No rankings found for ${sport} in ${previousYear}` 
+      });
     }
 
-    const teams = [];
+    // 4. Extract and validate teams from rankings
+    const rankedTeams = [];
     rankings.forEach(rank => {
-      teams.push(rank.P1, rank.P2, rank.P3, rank.P4, rank.P5, rank.P6, rank.P7, rank.P8);
+      for (const key in rank) {
+        if (key.match(/^P\d+$/) && rank[key]) {
+          rankedTeams.push(rank[key]);
+        }
+      }
     });
 
-    // Remove undefined or empty entries
-    const validTeams = teams.filter(team => team);
+    if (rankedTeams.length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: `Need at least 3 teams to create pools (found ${rankedTeams.length})`
+      });
+    }
 
-    // Check for 7 teams scenario
-    let teamsToConsider;
-    if (validTeams.length === 7) {
-      teamsToConsider = validTeams.slice(0, 5); // Take first 5 teams
+    // Validate all ranked teams exist in department configuration
+    const invalidTeams = rankedTeams.filter(team => !availableTeams.includes(team));
+    if (invalidTeams.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid team(s) found in rankings that don't exist in department configuration: ${invalidTeams.join(', ')}`
+      });
+    }
 
-      // Get last team from play-off status
-      const sportScheduleModel = createScheduleModel(sport);
-      const playOffMatch = await sportScheduleModel.findOne({ pool: 'play-off' }).sort({ createdAt: -1 });
-      if (playOffMatch) {
-        teamsToConsider.push(playOffMatch.status); // Use play-off status as last team
+    // 5. Determine teams for pools and playoff
+    let poolA = [];
+    let poolB = [];
+    let playoffTeams = [];
+    const hasOddTeams = rankedTeams.length % 2 !== 0;
+
+    if (hasOddTeams) {
+      // For odd number of teams (e.g., 11 teams)
+      playoffTeams = rankedTeams.slice(-2); // Last two teams for playoff
+      const teamsForPools = rankedTeams.slice(0, -2); // Consider only R1-R9
+      
+      // Distribute R1-R9 with TBD to make even
+      for (let i = 0; i < teamsForPools.length; i++) {
+        if (i % 2 === 0) {
+          poolA.push(teamsForPools[i]); // Odd positions (1,3,5,7,9)
+        } else {
+          poolB.push(teamsForPools[i]); // Even positions (2,4,6,8)
+        }
       }
-
-      teamsToConsider.push('TBD'); // Add 'TBD' as the 6th team
+      poolB.push('TBD'); // Add TBD to make pools equal size
     } else {
-      teamsToConsider = validTeams.slice(0, 8);
+      // For even number of teams (e.g., 12 teams)
+      for (let i = 0; i < rankedTeams.length; i++) {
+        if (i % 2 === 0) {
+          poolA.push(rankedTeams[i]); // Odd positions (1,3,5,7,9,11)
+        } else {
+          poolB.push(rankedTeams[i]); // Even positions (2,4,6,8,10,12)
+        }
+      }
     }
 
-    console.log('Teams considered for pools:', teamsToConsider);
+    // 6. Get all nominations at once for efficiency
+    const nominations = await PlayerNominationForm.find({
+      sport,
+      year: currentYear,
+      department: { $in: rankedTeams }
+    });
 
-    // Create pools manually for 7 teams scenario
-    let poolA, poolB;
-    if (validTeams.length === 7) {
-      poolA = [teamsToConsider[0], teamsToConsider[2], teamsToConsider[4]];
-      poolB = [teamsToConsider[1], teamsToConsider[3], teamsToConsider[5]];
-    } else {
-      poolA = teamsToConsider.filter((_, index) => index % 2 === 0);
-      poolB = teamsToConsider.filter((_, index) => index % 2 === 1);
-    }
+    const getNominations = (team) => {
+      if (team === 'TBD') return [];
+      const found = nominations.find(n => n.department === team);
+      return found ? found.nominations : [];
+    };
 
-    console.log('Pool A:', poolA);
-    console.log('Pool B:', poolB);
-
-    // Save pools
+    // 7. Save pools
     const newPools = new Pools({
       sport,
       poolA,
@@ -456,75 +250,97 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
     });
     await newPools.save();
 
-    // Create schedules for Pool A and Pool B using the new schema
+    // 8. Create schedules
     const schedules = [];
-    for (const [poolIndex, pool] of [poolA, poolB].entries()) {
+    const createPoolMatches = (pool, poolName) => {
       for (let i = 0; i < pool.length; i++) {
         for (let j = i + 1; j < pool.length; j++) {
           const team1 = pool[i];
           const team2 = pool[j];
 
-          if (team1 && team2) {
-            // Fetch nominations from playerNominationSchema
-            // const team1Nominations = await PlayerNominationForm.findOne({ department: team1 });
-            // const team2Nominations = await PlayerNominationForm.findOne({ department: team2 });
-            const team1Nominations = await PlayerNominationForm.findOne({ department: team1, sport, year: currentYear  });
-            const team2Nominations = await PlayerNominationForm.findOne({ department: team2, sport, year: currentYear  });
+          // Skip matches where both teams are TBD
+          if (team1 === 'TBD' && team2 === 'TBD') continue;
 
-
-            schedules.push({
-              pool: poolIndex === 0 ? 'Pool A' : 'Pool B',
-              team1,
-              team2,
-              sport,
-              year: currentYear.toString(),
-              status: 'upcoming',
-              result: null,
-              nominationsT1: team1Nominations ? team1Nominations.nominations : [],
-              nominationsT2: team2Nominations ? team2Nominations.nominations : [],
-            });
-          }
+          schedules.push({
+            pool: poolName,
+            team1,
+            team2,
+            sport,
+            year: currentYear.toString(),
+            status: 'upcoming',
+            result: null,
+            nominationsT1: getNominations(team1),
+            nominationsT2: getNominations(team2),
+          });
         }
       }
-    }
+    };
 
-    // If 7 teams, create additional play-off schedule
-    if (validTeams.length === 7) {
-      // Fetch nominations for play-off teams
-      const playOffTeam1 = validTeams[5];
-      const playOffTeam2 = validTeams[6];
-     
-      const playOffTeam1Nominations = await PlayerNominationForm.findOne({ department: playOffTeam1, sport, year: currentYear  });
-      const playOffTeam2Nominations = await PlayerNominationForm.findOne({ department: playOffTeam2, sport, year: currentYear  });
-    
+    createPoolMatches(poolA, 'Pool A');
+    createPoolMatches(poolB, 'Pool B');
+
+    // 9. Create playoff match for odd number of teams
+    if (hasOddTeams && playoffTeams.length === 2) {
       schedules.unshift({
         pool: 'play-off',
-        team1: playOffTeam1,
-        team2: playOffTeam2,
+        team1: playoffTeams[0],
+        team2: playoffTeams[1],
         sport,
         year: currentYear.toString(),
-        result: 'TBD',
         status: 'upcoming',
-        nominationsT1: playOffTeam1Nominations ? playOffTeam1Nominations.nominations : [],
-        nominationsT2: playOffTeam2Nominations ? playOffTeam2Nominations.nominations : [],
+        result: 'TBD',
+        nominationsT1: getNominations(playoffTeams[0]),
+        nominationsT2: getNominations(playoffTeams[1]),
+        isPlayoff: true
       });
     }
-    
 
-    // Save schedules in the appropriate collection
+    // 10. Save schedules
     const sportScheduleModel = createScheduleModel(sport);
     await sportScheduleModel.insertMany(schedules);
 
-    res.json({ success: true, message: 'Pools and schedules created successfully using the previous year\'s rankings!' });
+    // 11. Prepare response
+    const response = {
+      success: true,
+      message: `Successfully created pools with ${poolA.length} teams in Pool A and ${poolB.length} teams in Pool B`,
+      data: {
+        totalTeams: rankedTeams.length,
+        poolA,
+        poolB,
+        totalMatches: schedules.length,
+        hasPlayoff: hasOddTeams,
+        playoffMatch: hasOddTeams ? {
+          team1: playoffTeams[0],
+          team2: playoffTeams[1],
+          status: 'upcoming',
+          result: 'TBD'
+        } : null,
+        schedules: schedules.map(s => ({
+          pool: s.pool,
+          team1: s.team1,
+          team2: s.team2,
+          status: s.status,
+          isPlayoff: s.isPlayoff || false
+        }))
+      }
+    };
+
+    res.json(response);
+
   } catch (error) {
-    console.error('Error creating pools and schedules:', error);
-    res.status(500).json({ success: false, message: 'Error creating pools and schedules.' });
+    console.error('Error creating pools:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error creating pools and schedules',
+      error: error.message,
+      details: {
+        sport,
+        year: currentYear,
+        step: 'pool-creation'
+      }
+    });
   }
 });
-
-
-
-
 
 
 // // Fetch pools and schedules for a specific sport
@@ -679,6 +495,47 @@ router.post("/store-rankings", authenticateJWT, async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
+
+
+// Add this to your departmentRoutes.js
+router.get('/teams', authenticateJWT, async (req, res) => {
+  try {
+    const department = await Department.findOne();
+    if (!department) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Department configuration not found'
+      });
+    }
+    res.json({ 
+      success: true,
+      teams: department.teams || []
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching teams',
+      error: error.message
+    });
+  }
+});
+
+
+// Get Department List
+router.get('/departments', async (req, res) => {
+  try {
+    const departmentDoc = await Department.findOne({}, { teams: 1 }); // Assuming collection is "Department"
+    if (!departmentDoc) {
+      return res.status(404).json({ success: false, error: 'Departments not found' });
+    }
+
+    res.status(200).json({ success: true, departments: departmentDoc.teams });
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
 
 
 module.exports = router;
