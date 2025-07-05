@@ -11,20 +11,6 @@ const fs = require('fs');
 
 const router = express.Router();
 
-// // DSA signup route
-// router.post('/dsasignup', async (req, res) => {
-//   try {
-//     const existingUser = await DSAUser.findOne({ email: req.body.email });
-//     if (existingUser) return res.status(400).json({ error: 'Email already exists' });
-
-//     const hashedPassword = await bcrypt.hash(req.body.password, 10);
-//     const user = new DSAUser({ ...req.body, password: hashedPassword });
-//     const result = await user.save();
-//     res.status(201).send(result);
-//   } catch (error) {
-//     res.status(500).json({ error: 'Error creating account' });
-//   }
-// });
 
 // DSA login route
 router.post('/dsalogin', async (req, res) => {
@@ -49,31 +35,6 @@ router.get('/dsalandingpage', authenticateJWT, async (req, res) => {
   }
 });
 
-
-
-
-
-
-// router.post('/adminpost', authenticateJWT, async (req, res) => {
-//   const { adminpostdescription, adminimagepost } = req.body; // Receive post data
-//   const { username, email, id } = req.user; // Get user info from JWT
-  
-//   try {
-//     const newPost = new AdminPost({
-//       adminpostdescription,
-//       adminimagepost,
-//       adminpostuserId:id,
-//       adminpostusername: username,
-//       adminpostemail: email,
-//     });
-
-//     const savedPost = await newPost.save();
-//     res.status(201).json({ success: true, message: 'Post created successfully', post: savedPost });
-//   } catch (error) {
-//     console.error('Error creating post:', error);
-//     res.status(500).json({ error: 'Error creating post' });
-//   }
-// });
 
 // Create admin post with image upload
 router.post('/adminpost', authenticateJWT, upload.single('adminimagepost'), async (req, res) => {

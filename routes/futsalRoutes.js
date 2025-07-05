@@ -163,89 +163,95 @@ router.post('/stopmatchfutsal', authenticateJWT, async (req, res) => {
         // Save updated match
         await match.save();
 
-        // Handle final match for Futsal
-        if (match.pool === 'final' && sportCategory === 'Futsal') {
-            console.log("Final match detected. Processing Futsal tournament statistics...");
+    if (match.pool === 'final' && sportCategory === 'Futsal') {
+    console.log("Final match detected. Processing Football tournament statistics...");
 
-            // Step 1: Fetch all nominated players and store in BestFutsalPlayer
-            const allNominations = await PlayerNominationForm.find({
-                sport: "Futsal",
-                year: match.year
-            }).select("nominations");
+    // Step 1: Fetch all nominated players and store in BestFootballPlayer
+    const allNominations = await PlayerNominationForm.find({
+        sport: "Futsal",
+        year: match.year
+    }).select("nominations");
 
-            console.log("Total nomination entries found:", allNominations.length);
+    console.log("Total nomination entries found:", allNominations.length);
 
-            // Extract and prepare player data
-            const allPlayers = allNominations.flatMap((team) =>
-                team.nominations.map((player) => ({
-                    shirtNo: player.shirtNo,
-                    regNo: player.regNo,
-                    name: player.name,
-                    cnic: player.cnic,
-                    section: player.section,
-                    totalgoalsscored: 0 // Initialize with 0
-                }))
-            );
+    // Extract and prepare player data
+    const allPlayers = allNominations.flatMap((team) =>
+        team.nominations.map((player) => ({
+            shirtNo: player.shirtNo,
+            regNo: player.regNo,
+            name: player.name,
+            cnic: player.cnic,
+            section: player.section,
+            totalgoalsscored: 0,
+            matchesPlayed: 0 // Initialize matches played
+        }))
+    );
 
-            console.log("Total Players Extracted:", allPlayers.length);
+    console.log("Total Players Extracted:", allPlayers.length);
 
-            // Create or update BestFutsalPlayer document for the year
-            await BestFutsalPlayer.findOneAndUpdate(
-                { year: match.year },
-                {
-                    year: match.year,
-                    nominations: allPlayers
-                },
-                { upsert: true, new: true }
-            );
+    // Create or update BestFootballPlayer document for the year
+    await BestFutsalPlayer.findOneAndUpdate(
+        { year: match.year },
+        {
+            year: match.year,
+            nominations: allPlayers
+        },
+        { upsert: true, new: true }
+    );
 
-            // Step 2: Calculate total goals for each player
-            const allMatches = await ScheduleModel.find({
-                year: match.year,
-                status: 'recent' // Only completed matches
-            }).select("nominationsT1 nominationsT2");
+    // Step 2: Calculate statistics from all matches
+    const allMatches = await ScheduleModel.find({
+        year: match.year,
+        status: 'recent' // Only completed matches
+    }).select("nominationsT1 nominationsT2");
 
-            const bestFutsalPlayerDoc = await BestFutsalPlayer.findOne({ year: match.year });
-            if (!bestFutsalPlayerDoc) {
-                console.log("No best futsal player document found, skipping goal calculation");
-                return;
+    const bestFootballerDoc = await BestFutsalPlayer.findOne({ year: match.year });
+    if (!bestFootballerDoc) {
+        console.log("No best footballer document found, skipping statistics calculation");
+        return;
+    }
+
+    // Update each player's statistics
+    for (const player of bestFootballerDoc.nominations) {
+        let totalGoals = 0;
+        let matchesCount = 0;
+
+        // Search player in all matches
+        for (const match of allMatches) {
+            // Check team1 nominations
+            const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
+            if (playerInT1) {
+                totalGoals += playerInT1.goalsscored || 0;
+                matchesCount++;
             }
-
-            // Update each player's total goals
-            for (const player of bestFutsalPlayerDoc.nominations) {
-                let totalGoals = 0;
-
-                // Search player in all matches
-                for (const match of allMatches) {
-                    // Check team1 nominations
-                    const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
-                    if (playerInT1) {
-                        totalGoals += playerInT1.goalsscored || 0;
-                    }
-                    
-                    // Check team2 nominations
-                    const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
-                    if (playerInT2) {
-                        totalGoals += playerInT2.goalsscored || 0;
-                    }
-                }
-
-                // Update the player's total goals
-                await BestFutsalPlayer.updateOne(
-                    { 
-                        year: match.year,
-                        "nominations.regNo": player.regNo 
-                    },
-                    { 
-                        $set: { "nominations.$.totalgoalsscored": totalGoals } 
-                    }
-                );
-
-                console.log(`Updated ${player.name} (${player.regNo}) - Total Goals: ${totalGoals}`);
+            
+            // Check team2 nominations
+            const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
+            if (playerInT2) {
+                totalGoals += playerInT2.goalsscored || 0;
+                matchesCount++;
             }
-
-            console.log("All players' goal statistics updated in BestFutsalPlayer");
         }
+
+        // Update the player's statistics
+        await BestFutsalPlayer.updateOne(
+            { 
+                year: match.year,
+                "nominations.regNo": player.regNo 
+            },
+            { 
+                $set: { 
+                    "nominations.$.totalgoalsscored": totalGoals,
+                    "nominations.$.matchesPlayed": matchesCount
+                } 
+            }
+        );
+
+        console.log(`Updated ${player.name} (${player.regNo}) - Goals: ${totalGoals}, Matches: ${matchesCount}`);
+    }
+
+    console.log("All players' statistics updated in BestFutsalPlayer");
+}
 
         // Handle play-off winner replacements and nomination updates
         if (match.pool === 'play-off' && winningTeam) {
@@ -284,7 +290,7 @@ router.post('/stopmatchfutsal', authenticateJWT, async (req, res) => {
             console.log("TBD & Nominations Update Result:", updateResult);
         }
 
-        res.json({ 
+        res.json({   
             success: true, 
             message: 'Match stopped successfully' + (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
             match 

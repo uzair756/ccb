@@ -1390,164 +1390,166 @@ router.post("/handlealloutinning2", authenticateJWT, async (req, res) => {
         );
         console.log("TBD & Nominations Update Result:", updateResult);
       } else if (match.pool === "final" && sportCategory === "Cricket") {
-        console.log(
-          "Fetching nominated players from PlayerNominationForm for Cricket...",
-        );
+    console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
 
-        // Fetch all nominated players for Cricket
-        const allNominations = await PlayerNominationForm.find({
-          sport: "Cricket",
-          year: matchyear
-        }).select("nominations");
+    // Fetch all nominated players for Cricket
+    const allNominations = await PlayerNominationForm.find({
+        sport: "Cricket",
+        year: matchyear,
+    }).select("nominations");
 
-        console.log("Total nomination entries found:", allNominations.length);
+    console.log("Total nomination entries found:", allNominations.length);
 
-        // Extract only required player details
-        const allPlayers = allNominations.flatMap((team) =>
-          team.nominations.map((player) => ({
+    // Extract only required player details with matchesPlayed initialized to 0
+    const allPlayers = allNominations.flatMap((team) =>
+        team.nominations.map((player) => ({
             name: player.name,
             regNo: player.regNo,
             section: player.section,
             cnic: player.cnic,
-          })),
-        );
+            shirtNo: player.shirtNo || "",
+            totalrunsScored: 0,
+            totalballsfaced: 0,
+            totalwicketstaken: 0,
+            totalrunsconceeded: 0,
+            matchesPlayed: 0
+        }))
+    );
 
-        console.log("Total Players Extracted:", allPlayers.length);
+    console.log("Total Players Extracted:", allPlayers.length);
 
-        // // Prepare bulk operations (just pushing into nominations array without checking)
-        // const bulkOperations = allPlayers.map((player) => ({
-        //   updateOne: {
-        //     filter: {}, // No filtering condition, just push
-        //     update: {
-        //       $push: {
-        //         nominations: {
-        //           name: player.name,
-        //           regNo: player.regNo,
-        //           section: player.section,
-        //           cnic: player.cnic,
-        //           totalrunsScored: 0,
-        //           totalballsfaced: 0,
-        //           totalwicketstaken: 0,
-        //           totalrunsconceeded: 0,
-        //         },
-        //       },
-        //     },
-        //     upsert: true, // Create if doesn't exist
-        //   },
-        // }));
-        const bulkOperations = allPlayers.map((player) => ({
-          updateOne: {
-            filter: { year: matchyear }, // Ensure we're updating only the doc for this year
+    const bulkOperations = allPlayers.map((player) => ({
+        updateOne: {
+            filter: { year: matchyear },
             update: {
-              $setOnInsert: { year: matchyear }, // Set year only if this is a new document
-              $push: {
-                nominations: {
-                  name: player.name,
-                  regNo: player.regNo,
-                  section: player.section,
-                  cnic: player.cnic,
-                  shirtNo: player.shirtNo || "", // Optional, if shirtNo exists
-                  totalrunsScored: 0,
-                  totalballsfaced: 0,
-                  totalwicketstaken: 0,
-                  totalrunsconceeded: 0,
-                },
-              },
+                $setOnInsert: { year: matchyear },
+                $push: {
+                    nominations: player
+                }
             },
-            upsert: true, // Create the doc if it doesn't exist
-          },//docs.gradle.org/8.10.2/userguide/command_line_interface.html#sec
-        }));
+            upsert: true,
+        },
+    }));
 
-        // Execute bulk update
-        if (bulkOperations.length > 0) {
-          await BestCricketer.bulkWrite(bulkOperations);
-          console.log("All nominated players pushed to BestCricketer.");
-        } else {
-          console.log("No players to update.");
-        }
+    // Execute bulk update
+    if (bulkOperations.length > 0) {
+        await BestCricketer.bulkWrite(bulkOperations);
+        console.log("All nominated players pushed to BestCricketer.");
+    } else {
+        console.log("No players to update.");
+    }
 
-        const ScheduleModel = createScheduleModel(sportCategory);
-        const allMatches = await ScheduleModel.find({year: matchyear}).select(
-          "nominationsT1 nominationsT2",
-        );
+    const ScheduleModel = createScheduleModel(sportCategory);
+    const allMatches = await ScheduleModel.find({year: matchyear}).select(
+        "nominationsT1 nominationsT2",
+    );
 
-        // Get all players in BestCricketer
-        const bestCricketers = await BestCricketer.findOne({year:matchyear});
-        if (!bestCricketers) {
-          console.log("No best cricketers found, skipping update.");
-          return;
-        }
+    // Get all players in BestCricketer
+    const bestCricketers = await BestCricketer.findOne({year: matchyear});
+    if (!bestCricketers) {
+        console.log("No best cricketers found, skipping update.");
+        return;
+    }
 
-        for (const player of bestCricketers.nominations) {
-          let totalRuns = 0;
-          let totalWickets = 0;
-          let totalBallsFaced = 0;
-          let totalRunsConceded = 0;
+    for (const player of bestCricketers.nominations) {
+        let totalRuns = 0;
+        let totalWickets = 0;
+        let totalBallsFaced = 0;
+        let totalRunsConceded = 0;
+        let matchesPlayed = 0;
 
-          // Search player in nominationsT1 & nominationsT2
-          for (const match of allMatches) {
-            const foundInT1 = match.nominationsT1.filter(
-              (p) => p.regNo === player.regNo,
+        // Search player in nominationsT1 & nominationsT2
+        for (const match of allMatches) {
+            const foundInT1 = match.nominationsT1.find(
+                (p) => p.regNo === player.regNo,
             );
-            const foundInT2 = match.nominationsT2.filter(
-              (p) => p.regNo === player.regNo,
+            const foundInT2 = match.nominationsT2.find(
+                (p) => p.regNo === player.regNo,
             );
 
-            // Add runs scored from both teams
-            foundInT1.forEach((p) => (totalRuns += p.runsScored));
-            foundInT2.forEach((p) => (totalRuns += p.runsScored));
+            // Count matches played (appears in either team)
+            if (foundInT1 || foundInT2) {
+                matchesPlayed++;
+            }
+
+            // Calculate runs scored (more accurate method)
+            if (foundInT1) {
+                totalRuns += calculateTotalRuns(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalRuns += calculateTotalRuns(foundInT2.ballsFaced || []);
+            }
 
             // Add wickets taken from both teams
-            foundInT1.forEach((p) => (totalWickets += p.wicketsTaken));
-            foundInT2.forEach((p) => (totalWickets += p.wicketsTaken));
+            if (foundInT1) totalWickets += foundInT1.wicketsTaken || 0;
+            if (foundInT2) totalWickets += foundInT2.wicketsTaken || 0;
 
-            // Calculate total balls faced (length of ballsFaced array)
-            foundInT1.forEach(
-              (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-            );
-            foundInT2.forEach(
-              (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-            );
+            // Calculate total balls faced (excluding wides and no-balls)
+            if (foundInT1) {
+                totalBallsFaced += countValidBalls(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalBallsFaced += countValidBalls(foundInT2.ballsFaced || []);
+            }
 
-            // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
-            const processBallsBowled = (ballsArray) => {
-              return ballsArray.reduce((sum, ball) => {
-                if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
-                if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
-                return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
-              }, 0);
-            };
-
-            foundInT1.forEach(
-              (p) =>
-                (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-            );
-            foundInT2.forEach(
-              (p) =>
-                (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-            );
-          }
-
-          // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
-          await BestCricketer.updateOne(
-            { "nominations.regNo": player.regNo },
-            {
-              $set: {
-                "nominations.$.totalrunsScored": totalRuns,
-                "nominations.$.totalwicketstaken": totalWickets,
-                "nominations.$.totalballsfaced": totalBallsFaced,
-                "nominations.$.totalrunsconceeded": totalRunsConceded,
-              },
-            },
-          );
-
-          console.log(
-            `Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`,
-          );
+            // Calculate total runs conceded
+            if (foundInT1) {
+                totalRunsConceded += calculateRunsConceded(foundInT1.ballsBowled || []);
+            }
+            if (foundInT2) {
+                totalRunsConceded += calculateRunsConceded(foundInT2.ballsBowled || []);
+            }
         }
 
-        console.log("All players' stats updated in BestCricketer.");
-      }
+        // Update all statistics including matchesPlayed
+        await BestCricketer.updateOne(
+            { "nominations.regNo": player.regNo },
+            {
+                $set: {
+                    "nominations.$.totalrunsScored": totalRuns,
+                    "nominations.$.totalwicketstaken": totalWickets,
+                    "nominations.$.totalballsfaced": totalBallsFaced,
+                    "nominations.$.totalrunsconceeded": totalRunsConceded,
+                    "nominations.$.matchesPlayed": matchesPlayed
+                },
+            },
+        );
+
+        console.log(
+            `Updated ${player.name} (RegNo: ${player.regNo}) -> ` +
+            `Runs: ${totalRuns}, Wickets: ${totalWickets}, ` +
+            `Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}, ` +
+            `Matches Played: ${matchesPlayed}`
+        );
+    }
+
+    console.log("All players' stats updated in BestCricketer.");
+}
+
+// Helper function to calculate total runs from balls faced
+function calculateTotalRuns(ballsFaced) {
+    return ballsFaced.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total; // Wides and no-balls don't count as balls faced
+        return total + (parseInt(ball) || 0);
+    }, 0);
+}
+
+// Helper function to count valid balls faced (excluding wides and no-balls)
+function countValidBalls(ballsFaced) {
+    return ballsFaced.filter(ball => 
+        ball !== 'WD' && ball !== 'NB'
+    ).length;
+}
+
+// Helper function to calculate runs conceded from balls bowled
+function calculateRunsConceded(ballsBowled) {
+    return ballsBowled.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total + 1; // Wides and no-balls count as 1 run
+        return total + (parseInt(ball) || 0); // Regular runs
+    }, 0);
+}
 
       await match.save();
 
@@ -1660,143 +1662,166 @@ router.post("/stopmatchcricket", authenticateJWT, async (req, res) => {
       );
       console.log("TBD & Nominations Update Result:", updateResult);
     } else if (match.pool === "final" && sportCategory === "Cricket") {
-      console.log(
-        "Fetching nominated players from PlayerNominationForm for Cricket...",
-      );
+    console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
 
-      // Fetch all nominated players for Cricket
-      const allNominations = await PlayerNominationForm.find({
+    // Fetch all nominated players for Cricket
+    const allNominations = await PlayerNominationForm.find({
         sport: "Cricket",
         year: matchyear,
-      }).select("nominations");
+    }).select("nominations");
 
-      console.log("Total nomination entries found:", allNominations.length);
+    console.log("Total nomination entries found:", allNominations.length);
 
-      // Extract only required player details
-      const allPlayers = allNominations.flatMap((team) =>
+    // Extract only required player details with matchesPlayed initialized to 0
+    const allPlayers = allNominations.flatMap((team) =>
         team.nominations.map((player) => ({
-          name: player.name,
-          regNo: player.regNo,
-          section: player.section,
-          cnic: player.cnic,
-        })),
-      );
+            name: player.name,
+            regNo: player.regNo,
+            section: player.section,
+            cnic: player.cnic,
+            shirtNo: player.shirtNo || "",
+            totalrunsScored: 0,
+            totalballsfaced: 0,
+            totalwicketstaken: 0,
+            totalrunsconceeded: 0,
+            matchesPlayed: 0
+        }))
+    );
 
-      console.log("Total Players Extracted:", allPlayers.length);
+    console.log("Total Players Extracted:", allPlayers.length);
 
-      const bulkOperations = allPlayers.map((player) => ({
+    const bulkOperations = allPlayers.map((player) => ({
         updateOne: {
-          filter: { year: matchyear }, // Ensure we're updating only the doc for this year
-          update: {
-            $setOnInsert: { year: matchyear }, // Set year only if this is a new document
-            $push: {
-              nominations: {
-                name: player.name,
-                regNo: player.regNo,
-                section: player.section,
-                cnic: player.cnic,
-                shirtNo: player.shirtNo || "", // Optional, if shirtNo exists
-                totalrunsScored: 0,
-                totalballsfaced: 0,
-                totalwicketstaken: 0,
-                totalrunsconceeded: 0,
-              },
+            filter: { year: matchyear },
+            update: {
+                $setOnInsert: { year: matchyear },
+                $push: {
+                    nominations: player
+                }
             },
-          },
-          upsert: true, // Create the doc if it doesn't exist
+            upsert: true,
         },
-      }));
+    }));
 
-      // Execute bulk update
-      if (bulkOperations.length > 0) {
+    // Execute bulk update
+    if (bulkOperations.length > 0) {
         await BestCricketer.bulkWrite(bulkOperations);
         console.log("All nominated players pushed to BestCricketer.");
-      } else {
+    } else {
         console.log("No players to update.");
-      }
+    }
 
-      const ScheduleModel = createScheduleModel(sportCategory);
-      const allMatches = await ScheduleModel.find({year: matchyear}).select(
+    const ScheduleModel = createScheduleModel(sportCategory);
+    const allMatches = await ScheduleModel.find({year: matchyear}).select(
         "nominationsT1 nominationsT2",
-      );
+    );
 
-      // Get all players in BestCricketer
-      const bestCricketers = await BestCricketer.findOne({year:matchyear});
-      if (!bestCricketers) {
+    // Get all players in BestCricketer
+    const bestCricketers = await BestCricketer.findOne({year: matchyear});
+    if (!bestCricketers) {
         console.log("No best cricketers found, skipping update.");
         return;
-      }
+    }
 
-      for (const player of bestCricketers.nominations) {
+    for (const player of bestCricketers.nominations) {
         let totalRuns = 0;
         let totalWickets = 0;
         let totalBallsFaced = 0;
         let totalRunsConceded = 0;
+        let matchesPlayed = 0;
 
         // Search player in nominationsT1 & nominationsT2
         for (const match of allMatches) {
-          const foundInT1 = match.nominationsT1.filter(
-            (p) => p.regNo === player.regNo,
-          );
-          const foundInT2 = match.nominationsT2.filter(
-            (p) => p.regNo === player.regNo,
-          );
+            const foundInT1 = match.nominationsT1.find(
+                (p) => p.regNo === player.regNo,
+            );
+            const foundInT2 = match.nominationsT2.find(
+                (p) => p.regNo === player.regNo,
+            );
 
-          // Add runs scored from both teams
-          foundInT1.forEach((p) => (totalRuns += p.runsScored));
-          foundInT2.forEach((p) => (totalRuns += p.runsScored));
+            // Count matches played (appears in either team)
+            if (foundInT1 || foundInT2) {
+                matchesPlayed++;
+            }
 
-          // Add wickets taken from both teams
-          foundInT1.forEach((p) => (totalWickets += p.wicketsTaken));
-          foundInT2.forEach((p) => (totalWickets += p.wicketsTaken));
+            // Calculate runs scored (more accurate method)
+            if (foundInT1) {
+                totalRuns += calculateTotalRuns(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalRuns += calculateTotalRuns(foundInT2.ballsFaced || []);
+            }
 
-          // Calculate total balls faced (length of ballsFaced array)
-          foundInT1.forEach(
-            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-          );
-          foundInT2.forEach(
-            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-          );
+            // Add wickets taken from both teams
+            if (foundInT1) totalWickets += foundInT1.wicketsTaken || 0;
+            if (foundInT2) totalWickets += foundInT2.wicketsTaken || 0;
 
-          // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
-          const processBallsBowled = (ballsArray) => {
-            return ballsArray.reduce((sum, ball) => {
-              if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
-              if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
-              return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
-            }, 0);
-          };
+            // Calculate total balls faced (excluding wides and no-balls)
+            if (foundInT1) {
+                totalBallsFaced += countValidBalls(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalBallsFaced += countValidBalls(foundInT2.ballsFaced || []);
+            }
 
-          foundInT1.forEach(
-            (p) =>
-              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-          );
-          foundInT2.forEach(
-            (p) =>
-              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-          );
+            // Calculate total runs conceded
+            if (foundInT1) {
+                totalRunsConceded += calculateRunsConceded(foundInT1.ballsBowled || []);
+            }
+            if (foundInT2) {
+                totalRunsConceded += calculateRunsConceded(foundInT2.ballsBowled || []);
+            }
         }
 
-        // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
+        // Update all statistics including matchesPlayed
         await BestCricketer.updateOne(
-          { "nominations.regNo": player.regNo },
-          {
-            $set: {
-              "nominations.$.totalrunsScored": totalRuns,
-              "nominations.$.totalwicketstaken": totalWickets,
-              "nominations.$.totalballsfaced": totalBallsFaced,
-              "nominations.$.totalrunsconceeded": totalRunsConceded,
+            { "nominations.regNo": player.regNo },
+            {
+                $set: {
+                    "nominations.$.totalrunsScored": totalRuns,
+                    "nominations.$.totalwicketstaken": totalWickets,
+                    "nominations.$.totalballsfaced": totalBallsFaced,
+                    "nominations.$.totalrunsconceeded": totalRunsConceded,
+                    "nominations.$.matchesPlayed": matchesPlayed
+                },
             },
-          },
         );
 
         console.log(
-          `Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`,
+            `Updated ${player.name} (RegNo: ${player.regNo}) -> ` +
+            `Runs: ${totalRuns}, Wickets: ${totalWickets}, ` +
+            `Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}, ` +
+            `Matches Played: ${matchesPlayed}`
         );
-      }
-
-      console.log("All players' stats updated in BestCricketer.");
     }
+
+    console.log("All players' stats updated in BestCricketer.");
+}
+
+// Helper function to calculate total runs from balls faced
+function calculateTotalRuns(ballsFaced) {
+    return ballsFaced.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total; // Wides and no-balls don't count as balls faced
+        return total + (parseInt(ball) || 0);
+    }, 0);
+}
+
+// Helper function to count valid balls faced (excluding wides and no-balls)
+function countValidBalls(ballsFaced) {
+    return ballsFaced.filter(ball => 
+        ball !== 'WD' && ball !== 'NB'
+    ).length;
+}
+
+// Helper function to calculate runs conceded from balls bowled
+function calculateRunsConceded(ballsBowled) {
+    return ballsBowled.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total + 1; // Wides and no-balls count as 1 run
+        return total + (parseInt(ball) || 0); // Regular runs
+    }, 0);
+}
 
     res.json({ success: true, message: "Match stopped successfully.", match });
   } catch (error) {
@@ -3166,139 +3191,166 @@ router.post("/completeSuperOver", authenticateJWT, async (req, res) => {
       );
       console.log("TBD & Nominations Update Result:", updateResult);
     } else if (match.pool === "final" && sportCategory === "Cricket") {
-      console.log(
-        "Fetching nominated players from PlayerNominationForm for Cricket...",
-      );
+    console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
 
-      // Fetch all nominated players for Cricket
-      const allNominations = await PlayerNominationForm.find({
+    // Fetch all nominated players for Cricket
+    const allNominations = await PlayerNominationForm.find({
         sport: "Cricket",
         year: matchyear,
-      }).select("nominations");
+    }).select("nominations");
 
-      console.log("Total nomination entries found:", allNominations.length);
+    console.log("Total nomination entries found:", allNominations.length);
 
-      // Extract only required player details
-      const allPlayers = allNominations.flatMap((team) =>
+    // Extract only required player details with matchesPlayed initialized to 0
+    const allPlayers = allNominations.flatMap((team) =>
         team.nominations.map((player) => ({
-          name: player.name,
-          regNo: player.regNo,
-          section: player.section,
-          cnic: player.cnic,
-        })),
-      );
+            name: player.name,
+            regNo: player.regNo,
+            section: player.section,
+            cnic: player.cnic,
+            shirtNo: player.shirtNo || "",
+            totalrunsScored: 0,
+            totalballsfaced: 0,
+            totalwicketstaken: 0,
+            totalrunsconceeded: 0,
+            matchesPlayed: 0
+        }))
+    );
 
-      console.log("Total Players Extracted:", allPlayers.length);
+    console.log("Total Players Extracted:", allPlayers.length);
 
-      const bulkOperations = allPlayers.map((player) => ({
+    const bulkOperations = allPlayers.map((player) => ({
         updateOne: {
-          filter: { year: matchyear },
-          update: {
-            $setOnInsert: { year: matchyear },
-            $push: {
-              nominations: {
-                name: player.name,
-                regNo: player.regNo,
-                section: player.section,
-                cnic: player.cnic,
-                shirtNo: player.shirtNo || "",
-                totalrunsScored: 0,
-                totalballsfaced: 0,
-                totalwicketstaken: 0,
-                totalrunsconceeded: 0,
-              },
+            filter: { year: matchyear },
+            update: {
+                $setOnInsert: { year: matchyear },
+                $push: {
+                    nominations: player
+                }
             },
-          },
-          upsert: true,
+            upsert: true,
         },
-      }));
+    }));
 
-      // Execute bulk update
-      if (bulkOperations.length > 0) {
+    // Execute bulk update
+    if (bulkOperations.length > 0) {
         await BestCricketer.bulkWrite(bulkOperations);
         console.log("All nominated players pushed to BestCricketer.");
-      } else {
+    } else {
         console.log("No players to update.");
-      }
+    }
 
-      const allMatches = await ScheduleModel.find({year: matchyear}).select(
+    const ScheduleModel = createScheduleModel(sportCategory);
+    const allMatches = await ScheduleModel.find({year: matchyear}).select(
         "nominationsT1 nominationsT2",
-      );
+    );
 
-      const bestCricketers = await BestCricketer.findOne({year: matchyear});
-      if (!bestCricketers) {
+    // Get all players in BestCricketer
+    const bestCricketers = await BestCricketer.findOne({year: matchyear});
+    if (!bestCricketers) {
         console.log("No best cricketers found, skipping update.");
-      } else {
-        for (const player of bestCricketers.nominations) {
-          let totalRuns = 0;
-          let totalWickets = 0;
-          let totalBallsFaced = 0;
-          let totalRunsConceded = 0;
+        return;
+    }
 
-          // Search player in nominationsT1 & nominationsT2
-          for (const match of allMatches) {
-            const foundInT1 = match.nominationsT1.filter(
-              (p) => p.regNo === player.regNo,
+    for (const player of bestCricketers.nominations) {
+        let totalRuns = 0;
+        let totalWickets = 0;
+        let totalBallsFaced = 0;
+        let totalRunsConceded = 0;
+        let matchesPlayed = 0;
+
+        // Search player in nominationsT1 & nominationsT2
+        for (const match of allMatches) {
+            const foundInT1 = match.nominationsT1.find(
+                (p) => p.regNo === player.regNo,
             );
-            const foundInT2 = match.nominationsT2.filter(
-              (p) => p.regNo === player.regNo,
+            const foundInT2 = match.nominationsT2.find(
+                (p) => p.regNo === player.regNo,
             );
 
-            // Add runs scored from both teams
-            foundInT1.forEach((p) => (totalRuns += p.runsScored));
-            foundInT2.forEach((p) => (totalRuns += p.runsScored));
+            // Count matches played (appears in either team)
+            if (foundInT1 || foundInT2) {
+                matchesPlayed++;
+            }
+
+            // Calculate runs scored (more accurate method)
+            if (foundInT1) {
+                totalRuns += calculateTotalRuns(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalRuns += calculateTotalRuns(foundInT2.ballsFaced || []);
+            }
 
             // Add wickets taken from both teams
-            foundInT1.forEach((p) => (totalWickets += p.wicketsTaken));
-            foundInT2.forEach((p) => (totalWickets += p.wicketsTaken));
+            if (foundInT1) totalWickets += foundInT1.wicketsTaken || 0;
+            if (foundInT2) totalWickets += foundInT2.wicketsTaken || 0;
 
-            // Calculate total balls faced
-            foundInT1.forEach(
-              (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-            );
-            foundInT2.forEach(
-              (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-            );
+            // Calculate total balls faced (excluding wides and no-balls)
+            if (foundInT1) {
+                totalBallsFaced += countValidBalls(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalBallsFaced += countValidBalls(foundInT2.ballsFaced || []);
+            }
 
             // Calculate total runs conceded
-            const processBallsBowled = (ballsArray) => {
-              return ballsArray.reduce((sum, ball) => {
-                if (ball === "W" || ball.endsWith("B")) return sum;
-                if (ball === "WD" || ball === "NB") return sum + 1;
-                return sum + (parseInt(ball, 10) || 0);
-              }, 0);
-            };
+            if (foundInT1) {
+                totalRunsConceded += calculateRunsConceded(foundInT1.ballsBowled || []);
+            }
+            if (foundInT2) {
+                totalRunsConceded += calculateRunsConceded(foundInT2.ballsBowled || []);
+            }
+        }
 
-            foundInT1.forEach(
-              (p) =>
-                (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-            );
-            foundInT2.forEach(
-              (p) =>
-                (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-            );
-          }
-
-          // Update player stats in BestCricketer
-          await BestCricketer.updateOne(
+        // Update all statistics including matchesPlayed
+        await BestCricketer.updateOne(
             { "nominations.regNo": player.regNo },
             {
-              $set: {
-                "nominations.$.totalrunsScored": totalRuns,
-                "nominations.$.totalwicketstaken": totalWickets,
-                "nominations.$.totalballsfaced": totalBallsFaced,
-                "nominations.$.totalrunsconceeded": totalRunsConceded,
-              },
+                $set: {
+                    "nominations.$.totalrunsScored": totalRuns,
+                    "nominations.$.totalwicketstaken": totalWickets,
+                    "nominations.$.totalballsfaced": totalBallsFaced,
+                    "nominations.$.totalrunsconceeded": totalRunsConceded,
+                    "nominations.$.matchesPlayed": matchesPlayed
+                },
             },
-          );
+        );
 
-          console.log(
-            `Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`,
-          );
-        }
-        console.log("All players' stats updated in BestCricketer.");
-      }
+        console.log(
+            `Updated ${player.name} (RegNo: ${player.regNo}) -> ` +
+            `Runs: ${totalRuns}, Wickets: ${totalWickets}, ` +
+            `Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}, ` +
+            `Matches Played: ${matchesPlayed}`
+        );
     }
+
+    console.log("All players' stats updated in BestCricketer.");
+}
+
+// Helper function to calculate total runs from balls faced
+function calculateTotalRuns(ballsFaced) {
+    return ballsFaced.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total; // Wides and no-balls don't count as balls faced
+        return total + (parseInt(ball) || 0);
+    }, 0);
+}
+
+// Helper function to count valid balls faced (excluding wides and no-balls)
+function countValidBalls(ballsFaced) {
+    return ballsFaced.filter(ball => 
+        ball !== 'WD' && ball !== 'NB'
+    ).length;
+}
+
+// Helper function to calculate runs conceded from balls bowled
+function calculateRunsConceded(ballsBowled) {
+    return ballsBowled.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total + 1; // Wides and no-balls count as 1 run
+        return total + (parseInt(ball) || 0); // Regular runs
+    }, 0);
+}
 
     res.json({
       success: true,
@@ -3633,144 +3685,167 @@ if (match.inning === 1) {
         ],
       );
       console.log("TBD & Nominations Update Result:", updateResult);
-    } else if (match.pool === "final" && sportCategory === "Cricket") {
-      console.log(
-        "Fetching nominated players from PlayerNominationForm for Cricket...",
-      );
+    }else if (match.pool === "final" && sportCategory === "Cricket") {
+    console.log("Fetching nominated players from PlayerNominationForm for Cricket...");
 
-      // Fetch all nominated players for Cricket
-      const allNominations = await PlayerNominationForm.find({
+    // Fetch all nominated players for Cricket
+    const allNominations = await PlayerNominationForm.find({
         sport: "Cricket",
         year: matchyear,
-      }).select("nominations");
+    }).select("nominations");
 
-      console.log("Total nomination entries found:", allNominations.length);
+    console.log("Total nomination entries found:", allNominations.length);
 
-      // Extract only required player details
-      const allPlayers = allNominations.flatMap((team) =>
+    // Extract only required player details with matchesPlayed initialized to 0
+    const allPlayers = allNominations.flatMap((team) =>
         team.nominations.map((player) => ({
-          name: player.name,
-          regNo: player.regNo,
-          section: player.section,
-          cnic: player.cnic,
-        })),
-      );
+            name: player.name,
+            regNo: player.regNo,
+            section: player.section,
+            cnic: player.cnic,
+            shirtNo: player.shirtNo || "",
+            totalrunsScored: 0,
+            totalballsfaced: 0,
+            totalwicketstaken: 0,
+            totalrunsconceeded: 0,
+            matchesPlayed: 0
+        }))
+    );
 
-      console.log("Total Players Extracted:", allPlayers.length);
+    console.log("Total Players Extracted:", allPlayers.length);
 
-      const bulkOperations = allPlayers.map((player) => ({
+    const bulkOperations = allPlayers.map((player) => ({
         updateOne: {
-          filter: { year: matchyear }, // Ensure we're updating only the doc for this year
-          update: {
-            $setOnInsert: { year: matchyear }, // Set year only if this is a new document
-            $push: {
-              nominations: {
-                name: player.name,
-                regNo: player.regNo,
-                section: player.section,
-                cnic: player.cnic,
-                shirtNo: player.shirtNo || "", // Optional, if shirtNo exists
-                totalrunsScored: 0,
-                totalballsfaced: 0,
-                totalwicketstaken: 0,
-                totalrunsconceeded: 0,
-              },
+            filter: { year: matchyear },
+            update: {
+                $setOnInsert: { year: matchyear },
+                $push: {
+                    nominations: player
+                }
             },
-          },
-          upsert: true, // Create the doc if it doesn't exist
+            upsert: true,
         },
-      }));
+    }));
 
-      // Execute bulk update
-      if (bulkOperations.length > 0) {
+    // Execute bulk update
+    if (bulkOperations.length > 0) {
         await BestCricketer.bulkWrite(bulkOperations);
         console.log("All nominated players pushed to BestCricketer.");
-      } else {
+    } else {
         console.log("No players to update.");
-      }
+    }
 
-      const ScheduleModel = createScheduleModel(sportCategory);
-      const allMatches = await ScheduleModel.find({year: matchyear}).select(
+    const ScheduleModel = createScheduleModel(sportCategory);
+    const allMatches = await ScheduleModel.find({year: matchyear}).select(
         "nominationsT1 nominationsT2",
-      );
+    );
 
-      // Get all players in BestCricketer
-      const bestCricketers = await BestCricketer.findOne({year:matchyear});
-      if (!bestCricketers) {
+    // Get all players in BestCricketer
+    const bestCricketers = await BestCricketer.findOne({year: matchyear});
+    if (!bestCricketers) {
         console.log("No best cricketers found, skipping update.");
         return;
-      }
+    }
 
-      for (const player of bestCricketers.nominations) {
+    for (const player of bestCricketers.nominations) {
         let totalRuns = 0;
         let totalWickets = 0;
         let totalBallsFaced = 0;
         let totalRunsConceded = 0;
+        let matchesPlayed = 0;
 
         // Search player in nominationsT1 & nominationsT2
         for (const match of allMatches) {
-          const foundInT1 = match.nominationsT1.filter(
-            (p) => p.regNo === player.regNo,
-          );
-          const foundInT2 = match.nominationsT2.filter(
-            (p) => p.regNo === player.regNo,
-          );
+            const foundInT1 = match.nominationsT1.find(
+                (p) => p.regNo === player.regNo,
+            );
+            const foundInT2 = match.nominationsT2.find(
+                (p) => p.regNo === player.regNo,
+            );
 
-          // Add runs scored from both teams
-          foundInT1.forEach((p) => (totalRuns += p.runsScored));
-          foundInT2.forEach((p) => (totalRuns += p.runsScored));
+            // Count matches played (appears in either team)
+            if (foundInT1 || foundInT2) {
+                matchesPlayed++;
+            }
 
-          // Add wickets taken from both teams
-          foundInT1.forEach((p) => (totalWickets += p.wicketsTaken));
-          foundInT2.forEach((p) => (totalWickets += p.wicketsTaken));
+            // Calculate runs scored (more accurate method)
+            if (foundInT1) {
+                totalRuns += calculateTotalRuns(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalRuns += calculateTotalRuns(foundInT2.ballsFaced || []);
+            }
 
-          // Calculate total balls faced (length of ballsFaced array)
-          foundInT1.forEach(
-            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-          );
-          foundInT2.forEach(
-            (p) => (totalBallsFaced += p.ballsFaced?.length || 0),
-          );
+            // Add wickets taken from both teams
+            if (foundInT1) totalWickets += foundInT1.wicketsTaken || 0;
+            if (foundInT2) totalWickets += foundInT2.wicketsTaken || 0;
 
-          // Calculate total runs conceded (sum of ballsBowled array considering W=0, WD/NB=1, and numbers as they are)
-          const processBallsBowled = (ballsArray) => {
-            return ballsArray.reduce((sum, ball) => {
-              if (ball === "W" || ball.endsWith("B")) return sum; // Ignore Wickets & values ending with "B"
-              if (ball === "WD" || ball === "NB") return sum + 1; // Wides and No-Balls count as 1
-              return sum + (parseInt(ball, 10) || 0); // Convert valid numbers and ignore NaN
-            }, 0);
-          };
+            // Calculate total balls faced (excluding wides and no-balls)
+            if (foundInT1) {
+                totalBallsFaced += countValidBalls(foundInT1.ballsFaced || []);
+            }
+            if (foundInT2) {
+                totalBallsFaced += countValidBalls(foundInT2.ballsFaced || []);
+            }
 
-          foundInT1.forEach(
-            (p) =>
-              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-          );
-          foundInT2.forEach(
-            (p) =>
-              (totalRunsConceded += processBallsBowled(p.ballsBowled || [])),
-          );
+            // Calculate total runs conceded
+            if (foundInT1) {
+                totalRunsConceded += calculateRunsConceded(foundInT1.ballsBowled || []);
+            }
+            if (foundInT2) {
+                totalRunsConceded += calculateRunsConceded(foundInT2.ballsBowled || []);
+            }
         }
 
-        // Update totalRunsScored, totalwicketstaken, totalballsfaced, and totalrunsconceeded in BestCricketer
+        // Update all statistics including matchesPlayed
         await BestCricketer.updateOne(
-          { "nominations.regNo": player.regNo },
-          {
-            $set: {
-              "nominations.$.totalrunsScored": totalRuns,
-              "nominations.$.totalwicketstaken": totalWickets,
-              "nominations.$.totalballsfaced": totalBallsFaced,
-              "nominations.$.totalrunsconceeded": totalRunsConceded,
+            { "nominations.regNo": player.regNo },
+            {
+                $set: {
+                    "nominations.$.totalrunsScored": totalRuns,
+                    "nominations.$.totalwicketstaken": totalWickets,
+                    "nominations.$.totalballsfaced": totalBallsFaced,
+                    "nominations.$.totalrunsconceeded": totalRunsConceded,
+                    "nominations.$.matchesPlayed": matchesPlayed
+                },
             },
-          },
         );
 
         console.log(
-          `Updated ${player.name} (RegNo: ${player.regNo}) -> Runs: ${totalRuns}, Wickets: ${totalWickets}, Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}`,
+            `Updated ${player.name} (RegNo: ${player.regNo}) -> ` +
+            `Runs: ${totalRuns}, Wickets: ${totalWickets}, ` +
+            `Balls Faced: ${totalBallsFaced}, Runs Conceded: ${totalRunsConceded}, ` +
+            `Matches Played: ${matchesPlayed}`
         );
-      }
-
-      console.log("All players' stats updated in BestCricketer.");
     }
+
+    console.log("All players' stats updated in BestCricketer.");
+}
+
+// Helper function to calculate total runs from balls faced
+function calculateTotalRuns(ballsFaced) {
+    return ballsFaced.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total; // Wides and no-balls don't count as balls faced
+        return total + (parseInt(ball) || 0);
+    }, 0);
+}
+
+// Helper function to count valid balls faced (excluding wides and no-balls)
+function countValidBalls(ballsFaced) {
+    return ballsFaced.filter(ball => 
+        ball !== 'WD' && ball !== 'NB'
+    ).length;
+}
+
+// Helper function to calculate runs conceded from balls bowled
+function calculateRunsConceded(ballsBowled) {
+    return ballsBowled.reduce((total, ball) => {
+        if (ball === 'W') return total; // Wicket - no runs
+        if (ball === 'WD' || ball === 'NB') return total + 1; // Wides and no-balls count as 1 run
+        return total + (parseInt(ball) || 0); // Regular runs
+    }, 0);
+}
 
     await match.save();
     res.json({

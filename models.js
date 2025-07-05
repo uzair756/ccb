@@ -101,6 +101,7 @@ const bestCricketerSchema = new mongoose.Schema({
       totalballsfaced: { type: Number, default: 0 }, // Total runs scored
       totalwicketstaken: { type: Number, default: 0 }, // Total runs scored
       totalrunsconceeded: { type: Number, default: 0 }, // Total runs scored
+      matchesPlayed: { type: Number, default: 0 } // New field
     },
   ],
 });
@@ -114,6 +115,7 @@ const bestFootballPlayerSchema = new mongoose.Schema({
       cnic: { type: String, required: true },
       section: { type: String, required: true },
       totalgoalsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
     },
   ],
 });
@@ -127,6 +129,7 @@ const bestFutsalPlayerSchema = new mongoose.Schema({
       cnic: { type: String, required: true },
       section: { type: String, required: true },
       totalgoalsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
     },
   ],
 });
@@ -140,6 +143,7 @@ const bestBasketballPlayerSchema = new mongoose.Schema({
       cnic: { type: String, required: true },
       section: { type: String, required: true },
       totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
     },
   ],
 });
@@ -189,6 +193,14 @@ const rankingSchema = new mongoose.Schema({
   P6: String,
   P7: String,
   P8: String,
+  P9: String,
+  P10: String,
+  P11: String,
+  P12: String,
+  P13: String,
+  P14: String,
+  P15: String,
+  P16: String,
 });
 
 const departmentSchema = new mongoose.Schema({
@@ -233,21 +245,6 @@ const poolsSchema = new mongoose.Schema({
   year: { type: String, required: true }, // Year of pool creation
 });
 
-// const schedulesSchema = new mongoose.Schema({
-//   pool: { type: String, required: true }, // Pool A or Pool B
-//   team1: { type: String, required: true },
-//   team2: { type: String, required: true },
-//   sport: { type: String, required: true },
-//   createdAt: { type: Date, default: Date.now },
-//   scoreT1: { type: Number, default: 0 }, // Score for Team 1
-//   scoreT2: { type: Number, default: 0 }, // Score for Team 2
-//   result: { type: String, default: null }, // Result of the match (null by default)
-//   status: { type: String, default: 'upcoming' }, // Status of the match (upcoming by default)
-//   // T1wickets: { type: Number, default: 0 }, // Wickets for Team 1 (for cricket)
-//   // T2wickets: { type: Number, default: 0 }, // Wickets for Team 2 (for cricket)
-//   rounds: { type: Number, default: 0 },
-//   year: { type: String, required: true }, // Year of the match
-// });
 
 const getScheduleSchema = (sport) => {
   const baseSchema = {

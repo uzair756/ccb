@@ -128,22 +128,22 @@ router.put('/updaterules/:sport', authenticateJWT, async (req, res) => {
 });
 
 router.post('/create-pools', authenticateJWT, async (req, res) => {
-  const { sport } = req.body;
+  const { sport, year } = req.body; // Get year from request body
   const user = req.user;
-  const currentYear = new Date().getFullYear();
-  const previousYear = currentYear - 1;
+  // const currentYear = new Date().getFullYear();
+  const previousYear = year - 1; // Calculate previous year
 
   try {
     // 1. Check if pools already exist
     const existingPools = await Pools.findOne({ 
       sport, 
-      year: currentYear.toString() 
+      year: year.toString() 
     });
 
     if (existingPools) {
       return res.status(400).json({
         success: false,
-        message: `Pools already exist for ${currentYear} (created by ${existingPools.createdBy})`
+        message: `Pools already exist for ${year} (created by ${existingPools.createdBy})`
       });
     }
 
@@ -230,7 +230,7 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
     // 6. Get all nominations at once for efficiency
     const nominations = await PlayerNominationForm.find({
       sport,
-      year: currentYear,
+      year: year,
       department: { $in: rankedTeams }
     });
 
@@ -246,7 +246,7 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
       poolA,
       poolB,
       createdBy: user.username,
-      year: currentYear.toString(),
+      year: year.toString(),
     });
     await newPools.save();
 
@@ -266,7 +266,7 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
             team1,
             team2,
             sport,
-            year: currentYear.toString(),
+            year: year.toString(),
             status: 'upcoming',
             result: null,
             nominationsT1: getNominations(team1),
@@ -286,7 +286,7 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
         team1: playoffTeams[0],
         team2: playoffTeams[1],
         sport,
-        year: currentYear.toString(),
+        year: year.toString(),
         status: 'upcoming',
         result: 'TBD',
         nominationsT1: getNominations(playoffTeams[0]),
@@ -335,7 +335,7 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
       error: error.message,
       details: {
         sport,
-        year: currentYear,
+        year: year,
         step: 'pool-creation'
       }
     });
@@ -376,9 +376,10 @@ router.post('/create-pools', authenticateJWT, async (req, res) => {
 // Fetch pools and schedules for a specific sport
 router.get('/get-pools-and-schedules/:sport', authenticateJWT, async (req, res) => {
   const { sport } = req.params;
+  const { year } = req.query; // Get year from query params
 
   try {
-    const pools = await Pools.findOne({ sport });
+    const pools = await Pools.findOne({ sport, year: year.toString() });
 
     if (!pools) {
       return res.status(404).json({ success: false, message: `Pools not found for ${sport}.` });
