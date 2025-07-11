@@ -1,291 +1,3 @@
-// Route for creating semi-final and final matches
-// router.post('/createSemiFinalMatch', authenticateJWT, async (req, res) => {
-//   try {
-//     const { team1, team2, pool, year } = req.body;
-
-//     const newMatch = new Schedules({
-//       team1,
-//       team2,
-//       pool,
-//       year,
-//       status: 'upcoming',  // Default status for new matches
-//       sport: req.user.sportscategory,  // Add the sport category here
-//     });
-
-//     await newMatch.save();
-//     res.json({ success: true, message: 'Match created successfully' });
-//   } catch (error) {
-//     console.error('Error creating match:', error);
-//     res.status(500).json({ success: false, message: 'Failed to create match' });
-//   }
-// });
-
-//FOOTBALL ROUTES
-// Update match status route
-// router.post('/startmatchfootball', authenticateJWT, async (req, res) => {
-//   const { matchId } = req.body;
-
-//   try {
-//       const match = await Schedules.findById(matchId);
-//       if (!match) {
-//           return res.status(404).json({ success: false, message: 'Match not found' });
-//       }
-
-//       // Update match status to "live"
-//       match.status = 'live';
-//       await match.save();
-
-//       res.json({ success: true, message: 'Match status updated to live', match });
-//   } catch (error) {
-//       console.error("Error updating match status:", error);
-//       res.status(500).json({ success: false, message: 'Failed to update match status' });
-//   }
-// });
-// router.post('/startmatch', authenticateJWT, async (req, res) => {
-//   const { matchId } = req.body;
-//   const sportCategory = req.user.sportscategory; // Retrieve the sport category from the logged-in user
-
-//   try {
-//       if (!matchId || !sportCategory) {
-//           return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
-//       }
-
-//       const ScheduleModel = createScheduleModel(sportCategory); // Dynamically get the schedule model
-
-//       if (!ScheduleModel) {
-//           return res.status(400).json({ success: false, message: 'Invalid sport category.' });
-//       }
-
-//       const match = await ScheduleModel.findById(matchId);
-//       if (!match) {
-//           return res.status(404).json({ success: false, message: 'Match not found.' });
-//       }
-
-//       // Update match status to "live"
-//       match.status = 'live';
-//       await match.save();
-
-//       res.json({ success: true, message: 'Match status updated to live', match });
-//   } catch (error) {
-//       console.error("Error updating match status:", error);
-//       res.status(500).json({ success: false, message: 'Server error while updating match status.' });
-//   }
-// });
-
-// router.post('/updateScorefootball', authenticateJWT, async (req, res) => {
-//   const { matchId, team } = req.body;
-
-//   try {
-//       const match = await Schedules.findById(matchId);
-//       if (!match) {
-//           return res.status(404).json({ success: false, message: 'Match not found' });
-//       }
-
-//       if (team === 'T1') {
-//           match.scoreT1 += 1;
-//       } else if (team === 'T2') {
-//           match.scoreT2 += 1;
-//       } else {
-//           return res.status(400).json({ success: false, message: 'Invalid team identifier' });
-//       }
-
-//       await match.save();
-
-//       res.status(200).json({
-//           success: true,
-//           message: `Score updated successfully for ${team}`,
-//           match,
-//       });
-//   } catch (error) {
-//       console.error('Error updating score:', error);
-//       res.status(500).json({ success: false, message: 'Failed to update score' });
-//   }
-// });
-
-// router.post('/stopmatchfootball', authenticateJWT, async (req, res) => {
-//   const { matchId } = req.body;
-
-//   try {
-//       // Find the match by ID
-//       const match = await Schedules.findById(matchId);
-//       if (!match) {
-//           return res.status(404).json({ success: false, message: 'Match not found' });
-//       }
-
-//       // Update status to "recent"
-//       match.status = 'recent';
-
-//       // Determine the result
-//       if (match.scoreT1 > match.scoreT2) {
-//           match.result = match.team1; // Team 1 wins
-//       } else if (match.scoreT2 > match.scoreT1) {
-//           match.result = match.team2; // Team 2 wins
-//       } else {
-//           match.result = 'Draw'; // It's a tie
-//       }
-
-//       // Save the match with updated status and result
-//       await match.save();
-
-//       // Check if the match is a play-off
-//       if (match.pool === 'play-off') {
-//           console.log("Play-off match detected. Updating TBD entries...");
-
-//           // Update all entries with TBD in the same sport and year
-//           const updateResult = await Schedules.updateMany(
-//               {
-//                   sport: match.sport,
-//                   year: match.year,
-//                   $or: [
-//                       { team1: 'TBD' },
-//                       { team2: 'TBD' }
-//                   ]
-//               },
-//               [
-//                   {
-//                       $set: {
-//                           team1: {
-//                               $cond: [{ $eq: ["$team1", "TBD"] }, match.result, "$team1"]
-//                           },
-//                           team2: {
-//                               $cond: [{ $eq: ["$team2", "TBD"] }, match.result, "$team2"]
-//                           }
-//                       }
-//                   }
-//               ]
-//           );
-
-//           console.log("Update Result:", updateResult);
-//       }
-
-//       res.json({ success: true, message: 'Match stopped successfully', match });
-//   } catch (error) {
-//       console.error("Error in /stopmatch:", error);
-//       res.status(500).json({ success: false, message: 'Error stopping the match', error });
-//   }
-// });
-// router.post('/stopmatch', authenticateJWT, async (req, res) => {
-//     const { matchId } = req.body;
-//     const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
-
-//     try {
-//         if (!matchId || !sportCategory) {
-//             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
-//         }
-
-//         const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-
-//         if (!ScheduleModel) {
-//             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
-//         }
-
-//         const match = await ScheduleModel.findById(matchId);
-//         if (!match) {
-//             return res.status(404).json({ success: false, message: 'Match not found.' });
-//         }
-
-//         // Update status to "recent"
-//         match.status = 'recent';
-
-//         // Determine match result (winner or draw)
-//         let winningTeam = null;
-//         if (match.scoreT1 > match.scoreT2) {
-//             match.result = match.team1; // Team 1 wins
-//             winningTeam = match.team1;
-//         } else if (match.scoreT2 > match.scoreT1) {
-//             match.result = match.team2; // Team 2 wins
-//             winningTeam = match.team2;
-//         } else {
-//             match.result = 'Draw'; // Match is a tie
-//         }
-
-//         // Save updated match
-//         await match.save();
-
-//         // Handle play-off winner replacements and nomination updates
-//         if (match.pool === 'play-off' && winningTeam) {
-//             console.log("Play-off match detected. Updating TBD entries with nominations...");
-
-//             // Fetch nominations of the winning team
-//             const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
-
-//             // Update all TBD matches with the winning team and its nominations
-//             const updateResult = await ScheduleModel.updateMany(
-//                 {
-//                     year: match.year,
-//                     $or: [{ team1: 'TBD' }, { team2: 'TBD' }],
-//                 },
-//                 [
-//                     {
-//                         $set: {
-//                             team1: {
-//                                 $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"]
-//                             },
-//                             team2: {
-//                                 $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"]
-//                             },
-//                             nominationsT1: {
-//                                 $cond: [{ $eq: ["$team1", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT1"]
-//                             },
-//                             nominationsT2: {
-//                                 $cond: [{ $eq: ["$team2", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT2"]
-//                             }
-//                         }
-//                     }
-//                 ]
-//             );
-
-//             console.log("TBD & Nominations Update Result:", updateResult);
-//         }
-
-//         res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
-//     } catch (error) {
-//         console.error("Error in /stopmatch:", error);
-//         res.status(500).json({ success: false, message: 'Error stopping the match', error });
-//     }
-//   });
-// router.post('/updateScore', authenticateJWT, async (req, res) => {
-//   const { matchId, team } = req.body;
-//   const sportCategory = req.user.sportscategory; // Get sport category from authenticated user
-
-//   try {
-//       if (!matchId || !sportCategory || !team) {
-//           return res.status(400).json({ success: false, message: 'Match ID, sport category, and team are required.' });
-//       }
-
-//       const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-
-//       if (!ScheduleModel) {
-//           return res.status(400).json({ success: false, message: 'Invalid sport category.' });
-//       }
-
-//       const match = await ScheduleModel.findById(matchId);
-//       if (!match) {
-//           return res.status(404).json({ success: false, message: 'Match not found.' });
-//       }
-
-//       // Update score based on the team
-//       if (team === 'T1') {
-//           match.scoreT1 += 1;
-//       } else if (team === 'T2') {
-//           match.scoreT2 += 1;
-//       } else {
-//           return res.status(400).json({ success: false, message: 'Invalid team identifier.' });
-//       }
-
-//       await match.save();
-
-//       res.status(200).json({
-//           success: true,
-//           message: `Score updated successfully for ${team}`,
-//           match,
-//       });
-//   } catch (error) {
-//       console.error('Error updating score:', error);
-//       res.status(500).json({ success: false, message: 'Failed to update score' });
-//   }
-// });
-
 const mongoose = require("mongoose");
 const express = require("express");
 const bcrypt = require("bcrypt");
@@ -295,6 +7,7 @@ const {
   Schedules,
   createScheduleModel,
   PlayerNominationForm,
+  Pools
 } = require("../models"); // Ensure the RefUser schema is defined in your models
 const authenticateJWT = require("../middleware");
 const config = require("../config"); // Include JWT secret configuration
@@ -383,112 +96,446 @@ router.get("/refmatches", authenticateJWT, async (req, res) => {
   }
 });
 
-router.post("/createSemiFinalMatch", authenticateJWT, async (req, res) => {
+// router.post('/create-semi-finals', authenticateJWT, async (req, res) => {
+//   try {
+//     const { sport, year } = req.body;
+//     const user = req.user;
+
+//     // 1. Get pools data
+//     const pools = await Pools.findOne({ sport, year });
+//     if (!pools) {
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: 'Pools not found. Create pools first.' 
+//       });
+//     }
+
+//     // 2. Check if semi-finals already exist
+//     const ScheduleModel = createScheduleModel(sport);
+//     const existingSemis = await ScheduleModel.find({ 
+//       sport, 
+//       year, 
+//       pool: 'semi' 
+//     });
+    
+//     if (existingSemis.length >= 2) {
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: 'Semi-finals already exist for this sport and year.' 
+//       });
+//     }
+
+//     // 3. Handle TBD teams by checking play-off matches
+//     const replaceTBD = async (team) => {
+//       if (team !== 'TBD') return team;
+      
+//       const playoffMatch = await ScheduleModel.findOne({
+//         sport,
+//         year,
+//         pool: 'play-off',
+//         status: 'recent'
+//       });
+      
+//       if (!playoffMatch || !playoffMatch.result) {
+//         throw new Error('Cannot resolve TBD team - play-off match not completed');
+//       }
+      
+//       return playoffMatch.result;
+//     };
+
+//     // Create resolved pools with TBD replaced
+//     const resolvedPoolA = await Promise.all(pools.poolA.map(replaceTBD));
+//     const resolvedPoolB = await Promise.all(pools.poolB.map(replaceTBD));
+
+//     // 4. Calculate team rankings based on match results
+//     const allMatches = await ScheduleModel.find({ 
+//       sport, 
+//       year,
+//       status: 'recent' // Only completed matches
+//     });
+
+//     // Function to calculate team wins
+//     const calculateTeamStats = (team) => {
+//       let wins = 0;
+//       allMatches.forEach(match => {
+//         if (match.result === team) wins++;
+//       });
+//       return { team, wins };
+//     };
+
+//     // Calculate rankings for Pool A
+//     const poolARankings = resolvedPoolA.map(calculateTeamStats)
+//       .sort((a, b) => b.wins - a.wins)
+//       .map(item => item.team);
+
+//     // Calculate rankings for Pool B
+//     const poolBRankings = resolvedPoolB.map(calculateTeamStats)
+//       .sort((a, b) => b.wins - a.wins)
+//       .map(item => item.team);
+
+//     // 5. Get nominations for all teams
+//     const teamNominations = await PlayerNominationForm.find({
+//       sport,
+//       year,
+//       department: { $in: [...poolARankings, ...poolBRankings] }
+//     });
+
+//     // Create a map of team to nominations for quick lookup
+//     const nominationsMap = {};
+//     teamNominations.forEach(doc => {
+//       nominationsMap[doc.department] = doc.nominations;
+//     });
+
+//     // 6. Create semi-final matches with nominations
+//     const semiFinal1 = {
+//       team1: poolARankings[0], // 1st Pool A
+//       team2: poolBRankings[1], // 2nd Pool B
+//       pool: 'semi',
+//       year,
+//       sport,
+//       status: 'upcoming',
+//       isKnockout: true,
+//       nominationsT1: nominationsMap[poolARankings[0]] || [],
+//       nominationsT2: nominationsMap[poolBRankings[1]] || []
+//     };
+
+//     const semiFinal2 = {
+//       team1: poolBRankings[0], // 1st Pool B
+//       team2: poolARankings[1], // 2nd Pool A
+//       pool: 'semi',
+//       year,
+//       sport,
+//       status: 'upcoming',
+//       isKnockout: true,
+//       nominationsT1: nominationsMap[poolBRankings[0]] || [],
+//       nominationsT2: nominationsMap[poolARankings[1]] || []
+//     };
+
+//     await ScheduleModel.insertMany([semiFinal1, semiFinal2]);
+
+//     res.json({
+//       success: true,
+//       message: 'Semi-finals created successfully with nominations!',
+//       data: {
+//         semiFinal1,
+//         semiFinal2,
+//         canCreateFinal: true
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('Error creating semi-finals:', error);
+//     res.status(500).json({ 
+//       success: false, 
+//       message: error.message || 'Error creating semi-finals' 
+//     });
+//   }
+// });
+
+router.post('/create-semi-finals', authenticateJWT, async (req, res) => {
   try {
-    const { team1, team2, pool, year } = req.body;
-    const sport = req.user.sportscategory;
+    const { sport, year } = req.body;
+    const user = req.user;
 
-    // Validate required fields
-    if (!team1 || !team2 || !pool || !year || !sport) {
-      return res.status(400).json({ 
+    console.log(`\n=== Creating semi-finals for ${sport} ${year} ===`);
+
+    // 1. Get pools data
+    const pools = await Pools.findOne({ sport, year });
+    if (!pools) {
+      console.log('Pools not found. Create pools first.');
+      return res.status(404).json({ 
         success: false, 
-        message: "All fields are required." 
+        message: 'Pools not found. Create pools first.' 
       });
     }
 
-    // Validate pool type
-    if (!['semi', 'final'].includes(pool)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid pool type. Must be 'semi' or 'final'." 
-      });
-    }
-
+    // 2. Check if semi-finals already exist
     const ScheduleModel = createScheduleModel(sport);
-    if (!ScheduleModel) {
+    const existingSemis = await ScheduleModel.find({ 
+      sport, 
+      year, 
+      pool: 'semi' 
+    });
+    
+    if (existingSemis.length >= 2) {
+      console.log('Semi-finals already exist for this sport and year.');
       return res.status(400).json({ 
         success: false, 
-        message: "Invalid sport category." 
+        message: 'Semi-finals already exist for this sport and year.' 
       });
     }
 
-    // Check for existing final match for this sport and year
-    if (pool === 'final') {
-      const existingFinal = await ScheduleModel.findOne({ 
-        sport, 
-        year, 
-        pool: 'final' 
+    // 3. Handle TBD teams
+    const replaceTBD = async (team) => {
+      if (team !== 'TBD') return team;
+      const playoffMatch = await ScheduleModel.findOne({
+        sport, year, pool: 'play-off', status: 'recent'
       });
-      
-      if (existingFinal) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Final match already exists for this sport and year." 
-        });
+      if (!playoffMatch || !playoffMatch.result) {
+        throw new Error('Cannot resolve TBD team - play-off match not completed');
       }
-    }
+      return playoffMatch.result;
+    };
 
-    // Check for existing semi matches for this sport and year
-    if (pool === 'semi') {
-      const existingSemis = await ScheduleModel.find({ 
-        sport, 
-        year, 
-        pool: 'semi' 
+    // Create resolved pools
+    const resolvedPoolA = await Promise.all(pools.poolA.map(replaceTBD));
+    const resolvedPoolB = await Promise.all(pools.poolB.map(replaceTBD));
+    console.log('Resolved Pools:');
+    console.log(`- Pool A: ${resolvedPoolA.join(', ')}`);
+    console.log(`- Pool B: ${resolvedPoolB.join(', ')}`);
+
+    // 4. Calculate team rankings with tie-breaking
+    const allMatches = await ScheduleModel.find({ sport, year, status: 'recent' });
+
+    const calculateTeamStats = async (team) => {
+      const teamMatches = allMatches.filter(m => m.team1 === team || m.team2 === team);
+      let stats = { 
+        team, wins: 0, 
+        pointsFor: 0, pointsAgainst: 0,
+        gamesWon: 0, gamesLost: 0,
+        headToHead: { wins: 0, matches: 0 }
+      };
+
+      teamMatches.forEach(match => {
+        const isTeam1 = match.team1 === team;
+        const opponent = isTeam1 ? match.team2 : match.team1;
+
+        if (match.result === team) stats.wins++;
+
+        if (sport.includes('Badminton') || sport.includes('Tennis')) {
+          const teamGames = isTeam1 ? match.scoreT1 : match.scoreT2;
+          const oppGames = isTeam1 ? match.scoreT2 : match.scoreT1;
+          stats.gamesWon += teamGames.reduce((a, b) => a + b, 0);
+          stats.gamesLost += oppGames.reduce((a, b) => a + b, 0);
+        } else {
+          stats.pointsFor += isTeam1 ? match.scoreT1 : match.scoreT2;
+          stats.pointsAgainst += isTeam1 ? match.scoreT2 : match.scoreT1;
+        }
+
+        if ([...resolvedPoolA, ...resolvedPoolB].includes(opponent)) {
+          stats.headToHead.matches++;
+          if (match.result === team) stats.headToHead.wins++;
+        }
       });
-      
-      if (existingSemis.length >= 2) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Maximum of 2 semi-final matches already exist for this sport and year." 
-        });
-      }
 
-      // Check if this exact match already exists
-      const existingMatch = await ScheduleModel.findOne({
-        $or: [
-          { team1, team2, sport, year, pool: 'semi' },
-          { team1: team2, team2: team1, sport, year, pool: 'semi' }
-        ]
+      return stats;
+    };
+
+    const rankTeams = async (teams, poolName) => {
+      console.log(`\nCalculating rankings for ${poolName}:`);
+      const teamStats = await Promise.all(teams.map(calculateTeamStats));
+      
+      // Log initial stats
+      teamStats.forEach(s => {
+        console.log(
+          `- ${s.team}: ${s.wins} wins | ` +
+          `${sport.includes('Badminton') ? `${s.gamesWon}-${s.gamesLost} games` : `${s.pointsFor}-${s.pointsAgainst} points`} | ` +
+          `H2H: ${s.headToHead.wins}/${s.headToHead.matches}`
+        );
       });
-      
-      if (existingMatch) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "This semi-final match already exists." 
-        });
-      }
-    }
 
-    // Fetch nominations for both teams
-    const [team1Nominations, team2Nominations] = await Promise.all([
-      PlayerNominationForm.findOne({ department: team1, sport, year }),
-      PlayerNominationForm.findOne({ department: team2, sport, year })
-    ]);
+      const rankedTeams = teamStats.sort((a, b) => {
+        // 1. Wins
+        if (b.wins !== a.wins) {
+          console.log(`\t${b.team} > ${a.team} (more wins: ${b.wins} vs ${a.wins})`);
+          return b.wins - a.wins;
+        }
 
-    // Create new match
-    const newMatch = new ScheduleModel({
-      team1,
-      team2,
-      pool,
-      year,
-      status: "upcoming",
-      sport,
-      nominationsT1: team1Nominations ? team1Nominations.nominations : [],
-      nominationsT2: team2Nominations ? team2Nominations.nominations : [],
+        // 2. Head-to-head
+        if (a.headToHead.matches > 0 && b.headToHead.matches > 0) {
+          const aRatio = a.headToHead.wins / a.headToHead.matches;
+          const bRatio = b.headToHead.wins / b.headToHead.matches;
+          if (aRatio !== bRatio) {
+            console.log(`\t${bRatio > aRatio ? b.team : a.team} > ${bRatio > aRatio ? a.team : b.team} (better H2H)`);
+            return bRatio - aRatio;
+          }
+        }
+
+        // 3. Game/Point Difference
+        let diffA, diffB, metric;
+        if (sport.includes('Badminton') || sport.includes('Tennis')) {
+          diffA = a.gamesWon - a.gamesLost;
+          diffB = b.gamesWon - b.gamesLost;
+          metric = "game difference";
+        } else {
+          diffA = a.pointsFor - a.pointsAgainst;
+          diffB = b.pointsFor - b.pointsAgainst;
+          metric = "point difference";
+        }
+
+        if (diffB !== diffA) {
+          console.log(`\t${b.team} > ${a.team} (better ${metric}: ${diffB} vs ${diffA})`);
+          return diffB - diffA;
+        }
+
+        // 4. Total Games/Points
+        const totalA = sport.includes('Badminton') ? a.gamesWon : a.pointsFor;
+        const totalB = sport.includes('Badminton') ? b.gamesWon : b.pointsFor;
+        if (totalB !== totalA) {
+          console.log(`\t${b.team} > ${a.team} (more ${sport.includes('Badminton') ? 'games' : 'points'})`);
+          return totalB - totalA;
+        }
+
+        // 5. Random draw
+        console.log(`\tRandom draw between ${a.team} and ${b.team}`);
+        return Math.random() - 0.5;
+      }).map(stat => stat.team);
+
+      console.log(`Final ${poolName} ranking: ${rankedTeams.join(' > ')}`);
+      return rankedTeams;
+    };
+
+    // Calculate final rankings
+    const poolARankings = await rankTeams(resolvedPoolA, "Pool A");
+    const poolBRankings = await rankTeams(resolvedPoolB, "Pool B");
+
+    // 5. Create semi-finals
+    const teamNominations = await PlayerNominationForm.find({
+      sport, year,
+      department: { $in: [...poolARankings, ...poolBRankings] }
     });
 
-    await newMatch.save();
-    
+    const nominationsMap = {};
+    teamNominations.forEach(doc => {
+      nominationsMap[doc.department] = doc.nominations;
+    });
+
+    const semiFinal1 = {
+      team1: poolARankings[0],
+      team2: poolBRankings[1],
+      pool: 'semi',
+      year,
+      sport,
+      status: 'upcoming',
+      isKnockout: true,
+      nominationsT1: nominationsMap[poolARankings[0]] || [],
+      nominationsT2: nominationsMap[poolBRankings[1]] || []
+    };
+
+    const semiFinal2 = {
+      team1: poolBRankings[0],
+      team2: poolARankings[1],
+      pool: 'semi',
+      year,
+      sport,
+      status: 'upcoming',
+      isKnockout: true,
+      nominationsT1: nominationsMap[poolBRankings[0]] || [],
+      nominationsT2: nominationsMap[poolARankings[1]] || []
+    };
+
+    await ScheduleModel.insertMany([semiFinal1, semiFinal2]);
+
+    console.log('\nCreated semi-finals:');
+    console.log(`- SF1: ${semiFinal1.team1} vs ${semiFinal1.team2}`);
+    console.log(`- SF2: ${semiFinal2.team1} vs ${semiFinal2.team2}`);
+    console.log('====================================');
+
     res.json({
       success: true,
-      message: "Match created successfully with nominations.",
-      match: newMatch
+      message: 'Semi-finals created successfully!',
+      data: {
+        semiFinal1,
+        semiFinal2,
+        tieBreakersUsed: poolARankings.length !== new Set(poolARankings).size || 
+                        poolBRankings.length !== new Set(poolBRankings).size
+      }
     });
+
   } catch (error) {
-    console.error("Error creating match:", error);
+    console.error('\nERROR creating semi-finals:', error.message);
     res.status(500).json({ 
       success: false, 
-      message: "Server error while creating match." 
+      message: error.message || 'Error creating semi-finals' 
+    });
+  }
+});
+
+// Updated create-final route with nominations
+router.post('/create-final', authenticateJWT, async (req, res) => {
+  try {
+    const { sport, year } = req.body;
+    const user = req.user;
+
+    // 1. Check if final already exists
+    const ScheduleModel = createScheduleModel(sport);
+    const existingFinal = await ScheduleModel.findOne({ 
+      sport, 
+      year, 
+      pool: 'final' 
+    });
+    
+    if (existingFinal) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Final already exists for this sport and year.' 
+      });
+    }
+
+    // 2. Get semi-final results
+    const semiFinals = await ScheduleModel.find({ 
+      sport, 
+      year, 
+      pool: 'semi',
+      status: 'recent' // Only completed matches
+    });
+
+    if (semiFinals.length < 2) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Both semi-finals must be completed first.' 
+      });
+    }
+
+    // 3. Determine finalists
+    const finalists = semiFinals.map(match => match.result);
+
+    if (finalists.length !== 2 || !finalists[0] || !finalists[1]) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Could not determine finalists from semi-final results.' 
+      });
+    }
+
+    // 4. Get nominations for finalists
+    const teamNominations = await PlayerNominationForm.find({
+      sport,
+      year,
+      department: { $in: finalists }
+    });
+
+    // Create a map of team to nominations
+    const nominationsMap = {};
+    teamNominations.forEach(doc => {
+      nominationsMap[doc.department] = doc.nominations;
+    });
+
+    // 5. Create final match with nominations
+    const finalMatch = {
+      team1: finalists[0],
+      team2: finalists[1],
+      pool: 'final',
+      year,
+      sport,
+      status: 'upcoming',
+      isKnockout: true,
+      nominationsT1: nominationsMap[finalists[0]] || [],
+      nominationsT2: nominationsMap[finalists[1]] || []
+    };
+
+    await ScheduleModel.create(finalMatch);
+
+    res.json({
+      success: true,
+      message: 'Final match created successfully with nominations!',
+      data: finalMatch
+    });
+
+  } catch (error) {
+    console.error('Error creating final:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error creating final match' 
     });
   }
 });

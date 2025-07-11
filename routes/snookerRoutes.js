@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {createScheduleModel,PlayerNominationForm} = require('../models'); // Ensure the RefUser schema is defined in your models
+const {createScheduleModel,PlayerNominationForm,BestSnookerPlayer} = require('../models'); // Ensure the RefUser schema is defined in your models
 const authenticateJWT = require('../middleware');
 const config = require('../config'); // Include JWT secret configuration
 
@@ -137,6 +137,104 @@ router.post('/stopmatchsnooker', authenticateJWT, async (req, res) => {
 
             console.log("TBD & Nominations Update Result:", updateResult);
         }
+
+        // Handle final match for Tennis
+            else if (match.pool === 'final' && sportCategory === 'Snooker') {
+                console.log("Final match detected. Processing Snooker tournament statistics...");
+    
+                // Step 1: Fetch all nominated players and store in BestTennisPlayer
+                const allNominations = await PlayerNominationForm.find({
+                    sport: "Snooker",
+                    year: match.year
+                }).select("nominations");
+    
+                console.log("Total nomination entries found:", allNominations.length);
+    
+                // Extract and prepare player data with matchesPlayed initialized to 0
+                const allPlayers = allNominations.flatMap((team) =>
+                    team.nominations.map((player) => ({
+                        shirtNo: player.shirtNo,
+                        regNo: player.regNo,
+                        name: player.name,
+                        cnic: player.cnic,
+                        section: player.section,
+                        totalpointsscored: 0,
+                        matchesPlayed: 0
+                    }))
+                );
+    
+                // Create or update BestTennisPlayer document
+                await BestSnookerPlayer.findOneAndUpdate(
+                    { year: match.year },
+                    {
+                        year: match.year,
+                        nominations: allPlayers
+                    },
+                    { upsert: true, new: true }
+                );
+    
+                // Step 2: Calculate statistics from all matches
+                const allMatches = await ScheduleModel.find({
+                    year: match.year,
+                    status: 'recent'
+                }).select("nominationsT1 nominationsT2");
+    
+                const bestTennisPlayerDoc = await BestSnookerPlayer.findOne({ year: match.year });
+                if (!bestTennisPlayerDoc) {
+                    console.log("No best tennis player document found, skipping statistics calculation");
+                    return;
+                }
+    
+                // Update each player's statistics
+                for (const player of bestTennisPlayerDoc.nominations) {
+                    let totalPoints = 0;
+                    let matchesCount = 0;
+    
+                    // Search player in all matches
+                    for (const match of allMatches) {
+                        // Check team1 nominations
+                        const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
+                        if (playerInT1) {
+                            if (playerInT1.pointsByQuarter) {
+                                totalPoints += playerInT1.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                            }
+                            matchesCount++;
+                        }
+                        
+                        // Check team2 nominations
+                        const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
+                        if (playerInT2) {
+                            if (playerInT2.pointsByQuarter) {
+                                totalPoints += playerInT2.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                            }
+                            matchesCount++;
+                        }
+                    }
+    
+                    // Update the player's statistics
+                    await BestSnookerPlayer.updateOne(
+                        { 
+                            year: match.year,
+                            "nominations.regNo": player.regNo 
+                        },
+                        { 
+                            $set: { 
+                                "nominations.$.totalpointsscored": totalPoints,
+                                "nominations.$.matchesPlayed": matchesCount
+                            } 
+                        }
+                    );
+                }
+            }
+    
+            await match.save();
+            res.json({ 
+                success: true, 
+                message: 'Match stopped successfully' + 
+                        (match.pool === 'play-off' ? ' and TBD entries updated' : '') +
+                        (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
+                match 
+            });
 
         res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
     } catch (error) {
@@ -410,6 +508,40 @@ router.post('/updatePlayerStatussnooker', authenticateJWT, async (req, res) => {
     }
 });
 
+
+// For Snooker
+router.get("/bestsnookerplayertp/:year", async (req, res) => {
+  const year = req.params.year;
+
+  try {
+    const snookerData = await BestSnookerPlayer.findOne({ year });
+
+    if (!snookerData || snookerData.nominations.length === 0) {
+      return res.status(404).json({ success: false, message: "No record found for the year." });
+    }
+
+    // Sort and get top 3 players
+    const topPlayers = [...snookerData.nominations]
+      .sort((a, b) => b.totalpointsscored - a.totalpointsscored)
+      .slice(0, 3)
+      .map(player => ({
+        name: player.name,
+        regNo: player.regNo,
+        points: player.totalpointsscored,
+        shirtNo: player.shirtNo,
+        section: player.section,
+        matchesPlayed: player.matchesPlayed,
+      }));
+
+    res.json({
+      success: true,
+      topPlayers: topPlayers
+    });
+  } catch (error) {
+    console.error("Error fetching best snooker players:", error);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+});
 
 
 

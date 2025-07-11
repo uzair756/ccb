@@ -765,7 +765,8 @@ router.get("/bestfootballertp/:year", async (req, res) => {
         regNo: bestFootballer.regNo,
         goals: bestFootballer.totalgoalsscored,
         shirtNo: bestFootballer.shirtNo,
-        section: bestFootballer.section
+        section: bestFootballer.section,
+        matchesPlayed: bestFootballer.matchesPlayed
       }
     });
   } catch (error) {
@@ -802,7 +803,7 @@ router.get('/bestfootballer', async (req, res) => {
         shirtNo: topScorer.shirtNo,
         section: topScorer.section,
         // Add matches count if you track it
-        matches: topScorer.matches || 'N/A'
+        matches: topScorer.matchesPlayed|| 'N/A'
       }
     });
   } catch (error) {

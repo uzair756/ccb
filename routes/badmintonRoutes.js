@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {createScheduleModel,PlayerNominationForm} = require('../models'); // Ensure the RefUser schema is defined in your models
+const {createScheduleModel,PlayerNominationForm,BestBadmintonMalePlayer,BestBadmintonFemalePlayer} = require('../models'); // Ensure the RefUser schema is defined in your models
 const authenticateJWT = require('../middleware');
 const config = require('../config'); // Include JWT secret configuration
 
@@ -49,15 +49,14 @@ router.post('/startmatchbadminton', authenticateJWT, async (req, res) => {
 
 router.post('/stopmatchbadminton', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
-    const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
+    const sportCategory = req.user.sportscategory;
 
     try {
         if (!matchId || !sportCategory) {
             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
         }
 
-        const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-
+        const ScheduleModel = createScheduleModel(sportCategory);
         if (!ScheduleModel) {
             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
         }
@@ -70,11 +69,10 @@ router.post('/stopmatchbadminton', authenticateJWT, async (req, res) => {
         // Update match status to "recent"
         match.status = 'recent';
 
-        // **Determine the match winner based on quarterWinners array**
-        const quarterWinners = match.quarterWinners || []; // Ensure array exists
+        // Determine the match winner
+        const quarterWinners = match.quarterWinners || [];
         const winnerCounts = {};
 
-        // Count occurrences of each team in quarterWinners
         quarterWinners.forEach(team => {
             if (team) {
                 winnerCounts[team] = (winnerCounts[team] || 0) + 1;
@@ -82,32 +80,29 @@ router.post('/stopmatchbadminton', authenticateJWT, async (req, res) => {
         });
 
         let winningTeam = null;
-
-        // ✅ If a team won 2 out of 3 quarters → They win
         if (winnerCounts[match.team1] === 2) {
             winningTeam = match.team1;
         } else if (winnerCounts[match.team2] === 2) {
             winningTeam = match.team2;
         } 
-        // ✅ If each team won 1 quarter & the last was a tie → Draw
         else if (winnerCounts[match.team1] === 1 && winnerCounts[match.team2] === 1 && quarterWinners.length === 3) {
             winningTeam = 'Draw';
         } 
-        // ✅ Default case: No clear winner, mark as Draw
         else {
             winningTeam = 'Draw';
         }
 
         match.result = winningTeam;
 
-        // **Handle play-off winner replacements and nomination updates**
+        // Handle play-off winner replacements
         if (match.pool === 'play-off' && winningTeam !== 'Draw') {
             console.log("Play-off match detected. Updating TBD entries with nominations...");
 
-            // Fetch nominations of the winning team
-            const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
+            const winnerNominations = await PlayerNominationForm.findOne({ 
+                department: winningTeam, 
+                sport: sportCategory 
+            });
 
-            // Update all TBD matches with the winning team and its nominations
             const updateResult = await ScheduleModel.updateMany(
                 {
                     year: match.year,
@@ -132,15 +127,109 @@ router.post('/stopmatchbadminton', authenticateJWT, async (req, res) => {
                     }
                 ]
             );
-
             console.log("TBD & Nominations Update Result:", updateResult);
+        }
+        // Handle final match for Badminton
+        else if (match.pool === 'final' && (sportCategory === 'Badminton (M)' || sportCategory === 'Badminton (F)')) {
+            console.log("Final match detected. Processing Badminton tournament statistics...");
+
+            // Determine which model to use based on sport category
+            const BestPlayerModel = sportCategory === 'Badminton (M)' 
+                ? BestBadmintonMalePlayer 
+                : BestBadmintonFemalePlayer;
+
+            // Step 1: Fetch all nominated players
+            const allNominations = await PlayerNominationForm.find({
+                sport: sportCategory,
+                year: match.year
+            }).select("nominations");
+
+            console.log("Total nomination entries found:", allNominations.length);
+
+            // Prepare player data
+            const allPlayers = allNominations.flatMap((team) =>
+                team.nominations.map((player) => ({
+                    shirtNo: player.shirtNo,
+                    regNo: player.regNo,
+                    name: player.name,
+                    cnic: player.cnic,
+                    section: player.section,
+                    totalpointsscored: 0,
+                    matchesPlayed: 0
+                }))
+            );
+
+            // Create or update BestPlayer document
+            await BestPlayerModel.findOneAndUpdate(
+                { year: match.year },
+                {
+                    year: match.year,
+                    nominations: allPlayers
+                },
+                { upsert: true, new: true }
+            );
+
+            // Step 2: Calculate statistics from all matches
+            const allMatches = await ScheduleModel.find({
+                year: match.year,
+                status: 'recent'
+            }).select("nominationsT1 nominationsT2");
+
+            const bestPlayerDoc = await BestPlayerModel.findOne({ year: match.year });
+            if (!bestPlayerDoc) {
+                console.log("No best player document found, skipping statistics calculation");
+                return;
+            }
+
+            // Update each player's statistics
+            for (const player of bestPlayerDoc.nominations) {
+                let totalPoints = 0;
+                let matchesCount = 0;
+
+                for (const match of allMatches) {
+                    const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
+                    if (playerInT1) {
+                        if (playerInT1.pointsByQuarter) {
+                            totalPoints += playerInT1.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                    
+                    const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
+                    if (playerInT2) {
+                        if (playerInT2.pointsByQuarter) {
+                            totalPoints += playerInT2.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                }
+
+                await BestPlayerModel.updateOne(
+                    { 
+                        year: match.year,
+                        "nominations.regNo": player.regNo 
+                    },
+                    { 
+                        $set: { 
+                            "nominations.$.totalpointsscored": totalPoints,
+                            "nominations.$.matchesPlayed": matchesCount
+                        } 
+                    }
+                );
+            }
         }
 
         await match.save();
-        res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
-
+        res.json({ 
+            success: true, 
+            message: 'Match stopped successfully' + 
+                    (match.pool === 'play-off' ? ' and TBD entries updated' : '') +
+                    (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
+            match 
+        });
+        
     } catch (error) {
-        console.error("Error in /stopmatch:", error);
+        console.error("Error in /stopmatchbadminton:", error);
         res.status(500).json({ success: false, message: 'Error stopping the match', error });
     }
 });
@@ -370,6 +459,72 @@ router.post('/updateHalf3rdbadminton', authenticateJWT, async (req, res) => {
   });
   
 
+
+router.get("/bestbadmintonmaleplayertp/:year", async (req, res) => {
+  const year = req.params.year;
+
+  try {
+    const badmintonmaleData = await BestBadmintonMalePlayer.findOne({ year });
+
+    if (!badmintonmaleData || badmintonmaleData.nominations.length === 0) {
+      return res.status(404).json({ success: false, message: "No record found for the year." });
+    }
+
+    // Sort and get top 3 players
+    const topPlayers = [...badmintonmaleData.nominations]
+      .sort((a, b) => b.totalpointsscored - a.totalpointsscored)
+      .slice(0, 3)
+      .map(player => ({
+        name: player.name,
+        regNo: player.regNo,
+        points: player.totalpointsscored,
+        shirtNo: player.shirtNo,
+        section: player.section,
+        matchesPlayed: player.matchesPlayed,
+      }));
+
+    res.json({
+      success: true,
+      topPlayers: topPlayers
+    });
+  } catch (error) {
+    console.error("Error fetching best badmintom male players:", error);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+});
+
+router.get("/bestbadmintonfemaleplayertp/:year", async (req, res) => {
+  const year = req.params.year;
+
+  try {
+    const badmintonfemaleData = await BestBadmintonFemalePlayer.findOne({ year });
+
+    if (!badmintonfemaleData || badmintonfemaleData.nominations.length === 0) {
+      return res.status(404).json({ success: false, message: "No record found for the year." });
+    }
+
+    // Sort and get top 3 players
+    const topPlayers = [...badmintonfemaleData.nominations]
+      .sort((a, b) => b.totalpointsscored - a.totalpointsscored)
+      .slice(0, 3)
+      .map(player => ({
+        name: player.name,
+        regNo: player.regNo,
+        points: player.totalpointsscored,
+        shirtNo: player.shirtNo,
+        section: player.section,
+        matchesPlayed: player.matchesPlayed,
+      }));
+
+    res.json({
+      success: true,
+      topPlayers: topPlayers
+    });
+  } catch (error) {
+    console.error("Error fetching best badminton female players:", error);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+});
 
 
 

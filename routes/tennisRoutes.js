@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {createScheduleModel,PlayerNominationForm} = require('../models'); // Ensure the RefUser schema is defined in your models
+const {createScheduleModel,PlayerNominationForm,BestTennisPlayer} = require('../models'); // Ensure the RefUser schema is defined in your models
 const authenticateJWT = require('../middleware');
 const config = require('../config'); // Include JWT secret configuration
 
@@ -49,14 +49,14 @@ router.post('/startmatchtennis', authenticateJWT, async (req, res) => {
 
 router.post('/stopmatchtennis', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
-    const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
+    const sportCategory = req.user.sportscategory;
 
     try {
         if (!matchId || !sportCategory) {
             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
         }
 
-        const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
+        const ScheduleModel = createScheduleModel(sportCategory);
 
         if (!ScheduleModel) {
             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
@@ -70,8 +70,8 @@ router.post('/stopmatchtennis', authenticateJWT, async (req, res) => {
         // Update match status to "recent"
         match.status = 'recent';
 
-        // **Determine the match winner based on quarterWinners array**
-        const quarterWinners = match.quarterWinners || []; // Ensure array exists
+        // Determine the match winner based on quarterWinners array
+        const quarterWinners = match.quarterWinners || [];
         const winnerCounts = {};
 
         // Count occurrences of each team in quarterWinners
@@ -83,29 +83,28 @@ router.post('/stopmatchtennis', authenticateJWT, async (req, res) => {
 
         let winningTeam = null;
 
-        // ✅ If a team won 2 out of 3 quarters → They win
         if (winnerCounts[match.team1] === 2) {
             winningTeam = match.team1;
         } else if (winnerCounts[match.team2] === 2) {
             winningTeam = match.team2;
         } 
-        // ✅ If each team won 1 quarter & the last was a tie → Draw
         else if (winnerCounts[match.team1] === 1 && winnerCounts[match.team2] === 1 && quarterWinners.length === 3) {
             winningTeam = 'Draw';
         } 
-        // ✅ Default case: No clear winner, mark as Draw
         else {
             winningTeam = 'Draw';
         }
 
         match.result = winningTeam;
 
-        // **Handle play-off winner replacements and nomination updates**
+        // Handle play-off winner replacements and nomination updates
         if (match.pool === 'play-off' && winningTeam !== 'Draw') {
             console.log("Play-off match detected. Updating TBD entries with nominations...");
 
-            // Fetch nominations of the winning team
-            const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
+            const winnerNominations = await PlayerNominationForm.findOne({ 
+                department: winningTeam, 
+                sport: sportCategory 
+            });
 
             // Update all TBD matches with the winning team and its nominations
             const updateResult = await ScheduleModel.updateMany(
@@ -132,15 +131,108 @@ router.post('/stopmatchtennis', authenticateJWT, async (req, res) => {
                     }
                 ]
             );
-
             console.log("TBD & Nominations Update Result:", updateResult);
+        }
+        // Handle final match for Tennis
+        else if (match.pool === 'final' && sportCategory === 'Tennis') {
+            console.log("Final match detected. Processing Tennis tournament statistics...");
+
+            // Step 1: Fetch all nominated players and store in BestTennisPlayer
+            const allNominations = await PlayerNominationForm.find({
+                sport: "Tennis",
+                year: match.year
+            }).select("nominations");
+
+            console.log("Total nomination entries found:", allNominations.length);
+
+            // Extract and prepare player data with matchesPlayed initialized to 0
+            const allPlayers = allNominations.flatMap((team) =>
+                team.nominations.map((player) => ({
+                    shirtNo: player.shirtNo,
+                    regNo: player.regNo,
+                    name: player.name,
+                    cnic: player.cnic,
+                    section: player.section,
+                    totalpointsscored: 0,
+                    matchesPlayed: 0
+                }))
+            );
+
+            // Create or update BestTennisPlayer document
+            await BestTennisPlayer.findOneAndUpdate(
+                { year: match.year },
+                {
+                    year: match.year,
+                    nominations: allPlayers
+                },
+                { upsert: true, new: true }
+            );
+
+            // Step 2: Calculate statistics from all matches
+            const allMatches = await ScheduleModel.find({
+                year: match.year,
+                status: 'recent'
+            }).select("nominationsT1 nominationsT2");
+
+            const bestTennisPlayerDoc = await BestTennisPlayer.findOne({ year: match.year });
+            if (!bestTennisPlayerDoc) {
+                console.log("No best tennis player document found, skipping statistics calculation");
+                return;
+            }
+
+            // Update each player's statistics
+            for (const player of bestTennisPlayerDoc.nominations) {
+                let totalPoints = 0;
+                let matchesCount = 0;
+
+                // Search player in all matches
+                for (const match of allMatches) {
+                    // Check team1 nominations
+                    const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
+                    if (playerInT1) {
+                        if (playerInT1.pointsByQuarter) {
+                            totalPoints += playerInT1.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                    
+                    // Check team2 nominations
+                    const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
+                    if (playerInT2) {
+                        if (playerInT2.pointsByQuarter) {
+                            totalPoints += playerInT2.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                }
+
+                // Update the player's statistics
+                await BestTennisPlayer.updateOne(
+                    { 
+                        year: match.year,
+                        "nominations.regNo": player.regNo 
+                    },
+                    { 
+                        $set: { 
+                            "nominations.$.totalpointsscored": totalPoints,
+                            "nominations.$.matchesPlayed": matchesCount
+                        } 
+                    }
+                );
+            }
         }
 
         await match.save();
-        res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
+        res.json({ 
+            success: true, 
+            message: 'Match stopped successfully' + 
+                    (match.pool === 'play-off' ? ' and TBD entries updated' : '') +
+                    (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
+            match 
+        });
 
     } catch (error) {
-        console.error("Error in /stopmatch:", error);
+        console.error("Error in /stopmatchtennis:", error);
         res.status(500).json({ success: false, message: 'Error stopping the match', error });
     }
 });
@@ -370,6 +462,40 @@ router.post('/updateHalf3rdtennis', authenticateJWT, async (req, res) => {
   });
   
 
+
+// For Tennis
+router.get("/besttennisplayertp/:year", async (req, res) => {
+  const year = req.params.year;
+
+  try {
+    const tennisData = await BestTennisPlayer.findOne({ year });
+
+    if (!tennisData || tennisData.nominations.length === 0) {
+      return res.status(404).json({ success: false, message: "No record found for the year." });
+    }
+
+    // Sort and get top 3 players
+    const topPlayers = [...tennisData.nominations]
+      .sort((a, b) => b.totalpointsscored - a.totalpointsscored)
+      .slice(0, 3)
+      .map(player => ({
+        name: player.name,
+        regNo: player.regNo,
+        points: player.totalpointsscored,
+        shirtNo: player.shirtNo,
+        section: player.section,
+        matchesPlayed: player.matchesPlayed,
+      }));
+
+    res.json({
+      success: true,
+      topPlayers: topPlayers
+    });
+  } catch (error) {
+    console.error("Error fetching best tennis players:", error);
+    res.status(500).json({ success: false, message: "Server error." });
+  }
+});
 
 
 

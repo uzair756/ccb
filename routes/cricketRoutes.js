@@ -3414,17 +3414,22 @@ router.get("/bestcricketertp/:year", async (req, res) => {
       success: true,
       bestBatsman: {
         name: bestBatsman.name,
+        section: bestBatsman.section,
+        shirtNo: bestBatsman.shirtNo,
         regNo: bestBatsman.regNo,
         runs: bestBatsman.totalrunsScored,
         ballsfaced: bestBatsman.totalballsfaced,
-        average: bestBatsman.totalrunsScored / (bestBatsman.totalballsfaced || 1)
+        average: bestBatsman.totalrunsScored / (bestBatsman.totalballsfaced || 1),
+        matchesPlayed: bestBatsman.matchesPlayed,
       },
       bestBowler: {
         name: bestBowler.name,
         regNo: bestBowler.regNo,
+        section: bestBatsman.section,
         wickets: bestBowler.totalwicketstaken,
         ballsbowled: bestBowler.totalrunsconceeded,
-        economy: bestBowler.totalwicketstaken / (bestBowler.totalrunsconceeded || 1)
+        economy: bestBowler.totalwicketstaken / (bestBowler.totalrunsconceeded || 1),
+        matchesPlayed: bestBowler.matchesPlayed,
       },
     });
   } catch (error) {

@@ -45,105 +45,6 @@ router.post('/startmatchbasketball', authenticateJWT, async (req, res) => {
 
 
 
-
-
-// router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
-//     const { matchId } = req.body;
-//     const sportCategory = req.user.sportscategory; // Retrieve sport category from logged-in user
-
-//     try {
-//         if (!matchId || !sportCategory) {
-//             return res.status(400).json({ success: false, message: 'Match ID and sport category are required.' });
-//         }
-
-//         const ScheduleModel = createScheduleModel(sportCategory); // Get correct schedule model
-
-//         if (!ScheduleModel) {
-//             return res.status(400).json({ success: false, message: 'Invalid sport category.' });
-//         }
-
-//         const match = await ScheduleModel.findById(matchId);
-//         if (!match) {
-//             return res.status(404).json({ success: false, message: 'Match not found.' });
-//         }
-
-//         // Update match status to "recent"
-//         match.status = 'recent';
-
-//         // **Determine the match winner based on quarterWinners array**
-//         const quarterWinners = match.quarterWinners || [];
-//         const winnerCounts = {};
-
-//         // Count occurrences of each team in quarterWinners
-//         quarterWinners.forEach(team => {
-//             if (team) {
-//                 winnerCounts[team] = (winnerCounts[team] || 0) + 1;
-//             }
-//         });
-
-//         // Find the team with the most wins
-//         let winningTeam = null;
-//         let maxWins = 0;
-
-//         for (const [team, count] of Object.entries(winnerCounts)) {
-//             if (count > maxWins) {
-//                 maxWins = count;
-//                 winningTeam = team;
-//             }
-//         }
-
-//         // If no team has more wins, it's a draw
-//         if (maxWins === 2 && Object.keys(winnerCounts).length > 1) {
-//             match.result = 'Draw';
-//         } else {
-//             match.result = winningTeam || 'Draw'; // Assign winner or draw
-//         }
-
-//         // Save updated match
-//         await match.save();
-
-//         // **Handle play-off winner replacements and nomination updates**
-//         if (match.pool === 'play-off' && winningTeam) {
-//             console.log("Play-off match detected. Updating TBD entries with nominations...");
-
-//             // Fetch nominations of the winning team
-//             const winnerNominations = await PlayerNominationForm.findOne({ department: winningTeam, sport: sportCategory });
-
-//             // Update all TBD matches with the winning team and its nominations
-//             const updateResult = await ScheduleModel.updateMany(
-//                 {
-//                     year: match.year,
-//                     $or: [{ team1: 'TBD' }, { team2: 'TBD' }],
-//                 },
-//                 [
-//                     {
-//                         $set: {
-//                             team1: {
-//                                 $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"]
-//                             },
-//                             team2: {
-//                                 $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"]
-//                             },
-//                             nominationsT1: {
-//                                 $cond: [{ $eq: ["$team1", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT1"]
-//                             },
-//                             nominationsT2: {
-//                                 $cond: [{ $eq: ["$team2", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT2"]
-//                             }
-//                         }
-//                     }
-//                 ]
-//             );
-
-//             console.log("TBD & Nominations Update Result:", updateResult);
-//         }
-
-//         res.json({ success: true, message: 'Match stopped successfully, nominations updated.', match });
-//     } catch (error) {
-//         console.error("Error in /stopmatch:", error);
-//         res.status(500).json({ success: false, message: 'Error stopping the match', error });
-//     }
-// });
 router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
     const { matchId } = req.body;
     const sportCategory = req.user.sportscategory;
@@ -167,173 +68,174 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
         // Update match status to "recent"
         match.status = 'recent';
 
-        // Determine the match winner based on quarterWinners array
+        // Improved winner determination logic
         const quarterWinners = match.quarterWinners || [];
-        const winnerCounts = {};
+        
+        // Count wins for each team
+        const team1Wins = quarterWinners.filter(winner => winner === match.team1).length;
+        const team2Wins = quarterWinners.filter(winner => winner === match.team2).length;
 
-        // Count occurrences of each team in quarterWinners
-        quarterWinners.forEach(team => {
-            if (team) {
-                winnerCounts[team] = (winnerCounts[team] || 0) + 1;
-            }
-        });
-
-        // Find the team with the most wins
-        let winningTeam = null;
-        let maxWins = 0;
-
-        for (const [team, count] of Object.entries(winnerCounts)) {
-            if (count > maxWins) {
-                maxWins = count;
-                winningTeam = team;
-            }
-        }
-
-        // If no team has more wins, it's a draw
-        if (maxWins === 2 && Object.keys(winnerCounts).length > 1) {
-            match.result = 'Draw';
+        // Determine the winner based on quarter wins
+        if (team1Wins > team2Wins) {
+            match.result = match.team1;
+        } else if (team2Wins > team1Wins) {
+            match.result = match.team2;
         } else {
-            match.result = winningTeam || 'Draw'; // Assign winner or draw
+            // If equal wins, check total points as tiebreaker
+            const team1Total = (match.nominationsT1 || []).reduce((sum, player) => 
+                sum + (player.pointsByQuarter?.reduce((s, p) => s + (p || 0), 0) || 0), 0);
+            const team2Total = (match.nominationsT2 || []).reduce((sum, player) => 
+                sum + (player.pointsByQuarter?.reduce((s, p) => s + (p || 0), 0) || 0), 0);
+
+            if (team1Total > team2Total) {
+                match.result = match.team1;
+            } else if (team2Total > team1Total) {
+                match.result = match.team2;
+            } else {
+                match.result = 'Draw';
+            }
         }
 
         // Save updated match
         await match.save();
 
-        // Handle final match for Basketball
-        if (match.pool === 'final' && sportCategory === 'Basketball') {
-    console.log("Final match detected. Processing Basketball tournament statistics...");
-
-    // Step 1: Fetch all nominated players and store in BestBasketballPlayer
-    const allNominations = await PlayerNominationForm.find({
-        sport: "Basketball",
-        year: match.year
-    }).select("nominations");
-
-    console.log("Total nomination entries found:", allNominations.length);
-
-    // Extract and prepare player data with matchesPlayed initialized to 0
-    const allPlayers = allNominations.flatMap((team) =>
-        team.nominations.map((player) => ({
-            shirtNo: player.shirtNo,
-            regNo: player.regNo,
-            name: player.name,
-            cnic: player.cnic,
-            section: player.section,
-            totalpointsscored: 0, // Initialize points
-            matchesPlayed: 0      // Initialize match count
-        }))
-    );
-
-    console.log("Total Players Extracted:", allPlayers.length);
-
-    // Create or update BestBasketballPlayer document for the year
-    await BestBasketballPlayer.findOneAndUpdate(
-        { year: match.year },
-        {
-            year: match.year,
-            nominations: allPlayers
-        },
-        { upsert: true, new: true }
-    );
-
-    // Step 2: Calculate statistics from all matches
-    const allMatches = await ScheduleModel.find({
-        year: match.year,
-        status: 'recent' // Only completed matches
-    }).select("nominationsT1 nominationsT2");
-
-    const bestBasketballPlayerDoc = await BestBasketballPlayer.findOne({ year: match.year });
-    if (!bestBasketballPlayerDoc) {
-        console.log("No best basketball player document found, skipping statistics calculation");
-        return;
-    }
-
-    // Update each player's statistics
-    for (const player of bestBasketballPlayerDoc.nominations) {
-        let totalPoints = 0;
-        let matchesCount = 0;
-
-        // Search player in all matches
-        for (const match of allMatches) {
-            // Check team1 nominations
-            const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
-            if (playerInT1) {
-                if (playerInT1.pointsByQuarter) {
-                    totalPoints += playerInT1.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
-                }
-                matchesCount++;
-            }
-            
-            // Check team2 nominations
-            const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
-            if (playerInT2) {
-                if (playerInT2.pointsByQuarter) {
-                    totalPoints += playerInT2.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
-                }
-                matchesCount++;
-            }
-        }
-
-        // Update the player's statistics
-        await BestBasketballPlayer.updateOne(
-            { 
-                year: match.year,
-                "nominations.regNo": player.regNo 
-            },
-            { 
-                $set: { 
-                    "nominations.$.totalpointsscored": totalPoints,
-                    "nominations.$.matchesPlayed": matchesCount
-                } 
-            }
-        );
-
-        console.log(`Updated ${player.name} (${player.regNo}) - Points: ${totalPoints}, Matches: ${matchesCount}`);
-    }
-
-    console.log("All players' statistics updated in BestBasketballPlayer");
-}
-
         // Handle play-off winner replacements and nomination updates
-        if (match.pool === 'play-off' && winningTeam) {
-            console.log("Play-off match detected. Updating TBD entries with nominations...");
-
+        if (match.pool === 'play-off' && match.result !== 'Draw') {
+            console.log("Play-off match detected. Updating TBD entries...");
+            
             const winnerNominations = await PlayerNominationForm.findOne({ 
-                department: winningTeam, 
-                sport: sportCategory 
-            });
+                department: match.result, 
+                sport: sportCategory,
+                year: match.year
+            }).select('nominations');
 
-            const updateResult = await ScheduleModel.updateMany(
+            console.log(`Found ${winnerNominations?.nominations?.length || 0} nominations for winner ${match.result}`);
+
+            // Update all matches where team1 is TBD
+            const updateTeam1Result = await ScheduleModel.updateMany(
                 {
                     year: match.year,
-                    $or: [{ team1: 'TBD' }, { team2: 'TBD' }],
+                    team1: 'TBD'
                 },
-                [
-                    {
-                        $set: {
-                            team1: {
-                                $cond: [{ $eq: ["$team1", "TBD"] }, winningTeam, "$team1"]
-                            },
-                            team2: {
-                                $cond: [{ $eq: ["$team2", "TBD"] }, winningTeam, "$team2"]
-                            },
-                            nominationsT1: {
-                                $cond: [{ $eq: ["$team1", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT1"]
-                            },
-                            nominationsT2: {
-                                $cond: [{ $eq: ["$team2", "TBD"] }, (winnerNominations ? winnerNominations.nominations : []), "$nominationsT2"]
-                            }
-                        }
+                {
+                    $set: {
+                        team1: match.result,
+                        nominationsT1: winnerNominations?.nominations || []
                     }
-                ]
+                }
+            );
+            console.log(`Updated ${updateTeam1Result.modifiedCount} matches for team1=TBD`);
+
+            // Update all matches where team2 is TBD
+            const updateTeam2Result = await ScheduleModel.updateMany(
+                {
+                    year: match.year,
+                    team2: 'TBD'
+                },
+                {
+                    $set: {
+                        team2: match.result,
+                        nominationsT2: winnerNominations?.nominations || []
+                    }
+                }
+            );
+            console.log(`Updated ${updateTeam2Result.modifiedCount} matches for team2=TBD`);
+        }
+
+        // Handle final match for Basketball (moved to end as requested)
+        if (match.pool === 'final' && sportCategory === 'Basketball') {
+            console.log("Final match detected. Processing Basketball tournament statistics...");
+
+            // Step 1: Fetch all nominated players and store in BestBasketballPlayer
+            const allNominations = await PlayerNominationForm.find({
+                sport: "Basketball",
+                year: match.year
+            }).select("nominations");
+
+            console.log("Total nomination entries found:", allNominations.length);
+
+            // Extract and prepare player data with matchesPlayed initialized to 0
+            const allPlayers = allNominations.flatMap((team) =>
+                team.nominations.map((player) => ({
+                    shirtNo: player.shirtNo,
+                    regNo: player.regNo,
+                    name: player.name,
+                    cnic: player.cnic,
+                    section: player.section,
+                    totalpointsscored: 0,
+                    matchesPlayed: 0
+                }))
             );
 
-            console.log("TBD & Nominations Update Result:", updateResult);
+            // Create or update BestBasketballPlayer document
+            await BestBasketballPlayer.findOneAndUpdate(
+                { year: match.year },
+                {
+                    year: match.year,
+                    nominations: allPlayers
+                },
+                { upsert: true, new: true }
+            );
+
+            // Step 2: Calculate statistics from all matches
+            const allMatches = await ScheduleModel.find({
+                year: match.year,
+                status: 'recent'
+            }).select("nominationsT1 nominationsT2");
+
+            const bestBasketballPlayerDoc = await BestBasketballPlayer.findOne({ year: match.year });
+            if (!bestBasketballPlayerDoc) {
+                console.log("No best basketball player document found, skipping statistics calculation");
+                return;
+            }
+
+            // Update each player's statistics
+            for (const player of bestBasketballPlayerDoc.nominations) {
+                let totalPoints = 0;
+                let matchesCount = 0;
+
+                // Search player in all matches
+                for (const match of allMatches) {
+                    // Check team1 nominations
+                    const playerInT1 = match.nominationsT1.find(p => p.regNo === player.regNo);
+                    if (playerInT1) {
+                        if (playerInT1.pointsByQuarter) {
+                            totalPoints += playerInT1.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                    
+                    // Check team2 nominations
+                    const playerInT2 = match.nominationsT2.find(p => p.regNo === player.regNo);
+                    if (playerInT2) {
+                        if (playerInT2.pointsByQuarter) {
+                            totalPoints += playerInT2.pointsByQuarter.reduce((sum, points) => sum + (points || 0), 0);
+                        }
+                        matchesCount++;
+                    }
+                }
+
+                // Update the player's statistics
+                await BestBasketballPlayer.updateOne(
+                    { 
+                        year: match.year,
+                        "nominations.regNo": player.regNo 
+                    },
+                    { 
+                        $set: { 
+                            "nominations.$.totalpointsscored": totalPoints,
+                            "nominations.$.matchesPlayed": matchesCount
+                        } 
+                    }
+                );
+            }
         }
 
         res.json({ 
             success: true, 
-            message: 'Match stopped successfully' + (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
+            message: 'Match stopped successfully' + 
+                    (match.pool === 'play-off' ? ' and TBD entries updated' : '') +
+                    (match.pool === 'final' ? ' and tournament statistics updated' : ''), 
             match 
         });
     } catch (error) {
@@ -341,7 +243,6 @@ router.post('/stopmatchbasketball', authenticateJWT, async (req, res) => {
         res.status(500).json({ success: false, message: 'Error stopping the match', error });
     }
 });
-
 
   router.post('/updateGoalbasketball', authenticateJWT, async (req, res) => {
     try {
@@ -608,36 +509,36 @@ router.post('/updatePlayerStatusbasketball', authenticateJWT, async (req, res) =
 
 
 
-// server/routes/bestFootballer.js
+// For Basketball
 router.get("/bestbasketballplayertp/:year", async (req, res) => {
   const year = req.params.year;
 
   try {
-    const footballData = await BestBasketballPlayer.findOne({ year });
+    const basketballData = await BestBasketballPlayer.findOne({ year });
 
-    if (!footballData || footballData.nominations.length === 0) {
+    if (!basketballData || basketballData.nominations.length === 0) {
       return res.status(404).json({ success: false, message: "No record found for the year." });
     }
 
-    // Find player(s) with highest goals
-    const maxGoals = Math.max(...footballData.nominations.map(n => n.totalpointsscored));
-    const topScorers = footballData.nominations.filter(n => n.totalpointsscored === maxGoals);
-    
-    // If multiple players have same highest goals, just take the first one
-    const bestFootballer = topScorers[0];
+    // Sort and get top 3 players
+    const topPlayers = [...basketballData.nominations]
+      .sort((a, b) => b.totalpointsscored - a.totalpointsscored)
+      .slice(0, 3)
+      .map(player => ({
+        name: player.name,
+        regNo: player.regNo,
+        points: player.totalpointsscored,
+        shirtNo: player.shirtNo,
+        section: player.section,
+        matchesPlayed: player.matchesPlayed,
+      }));
 
     res.json({
       success: true,
-      bestFootballer: {
-        name: bestFootballer.name,
-        regNo: bestFootballer.regNo,
-        points: bestFootballer.totalpointsscored,
-        shirtNo: bestFootballer.shirtNo,
-        section: bestFootballer.section
-      }
+      topPlayers: topPlayers // Only return the array of top players
     });
   } catch (error) {
-    console.error("Error fetching best footballer:", error);
+    console.error("Error fetching best basketball players:", error);
     res.status(500).json({ success: false, message: "Server error." });
   }
 });
@@ -670,7 +571,7 @@ router.get('/bestbasketballplayer', async (req, res) => {
         shirtNo: topScorer.shirtNo,
         section: topScorer.section,
         // Add matches count if you track it
-        matches: topScorer.matches || 'N/A'
+        matches: topScorer.matchesPlayed || 'N/A'
       }
     });
   } catch (error) {

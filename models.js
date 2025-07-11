@@ -147,6 +147,94 @@ const bestBasketballPlayerSchema = new mongoose.Schema({
     },
   ],
 });
+const bestTennisPlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+
+const bestSnookerPlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+
+const bestBadmintonMalePlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+const bestBadmintonFemalePlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+const bestTableTennisMalePlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+const bestTableTennisFemalePlayerSchema = new mongoose.Schema({
+  year: { type: String, required: true },
+  nominations: [
+    {
+      shirtNo: { type: String, required: true },
+      regNo: { type: String, required: true },
+      name: { type: String, required: true },
+      cnic: { type: String, required: true },
+      section: { type: String, required: true },
+      totalpointsscored: { type: Number, default: 0 }, // Total goals scored
+      matchesPlayed: { type: Number, default: 0 } // New field
+    },
+  ],
+});
+
+
 
 const trialEventSchema = new mongoose.Schema({
   sportCategory: { type: String, required: true },
@@ -878,6 +966,12 @@ const BestCricketer = mongoose.model("BestCricketer", bestCricketerSchema);
 const BestFootballPlayer = mongoose.model("BestFootballPlayer", bestFootballPlayerSchema);
 const BestFutsalPlayer = mongoose.model("BestFutsalPlayer", bestFutsalPlayerSchema);
 const BestBasketballPlayer = mongoose.model("BestBasketballPlayer", bestBasketballPlayerSchema);
+const BestTennisPlayer = mongoose.model("BestTennisPlayer", bestTennisPlayerSchema);
+const BestSnookerPlayer = mongoose.model("BestSnookerPlayer", bestSnookerPlayerSchema);
+const BestBadmintonMalePlayer = mongoose.model("BestBadmintonMalePlayer", bestBadmintonMalePlayerSchema);
+const BestBadmintonFemalePlayer = mongoose.model("BestBadmintonFemalePlayer",bestBadmintonFemalePlayerSchema);
+const BestTableTennisMalePlayer = mongoose.model("BestTableTennisMalePlayer", bestTableTennisMalePlayerSchema);
+const BestTableTennisFemalePlayer = mongoose.model("BestTableTennisFemalePlayer",bestTableTennisFemalePlayerSchema);
 const Department = mongoose.model('Department', departmentSchema);
 // const Schedules = mongoose.model("Schedules", schedulesSchema);
 // Function to create the correct model dynamically
@@ -911,6 +1005,12 @@ module.exports = {
   BestFootballPlayer,
   BestFutsalPlayer,
   BestBasketballPlayer,
+  BestTennisPlayer,
+  BestSnookerPlayer,
+  BestBadmintonMalePlayer,
+  BestBadmintonFemalePlayer,
+  BestTableTennisMalePlayer,
+  BestTableTennisFemalePlayer,
   Department,
 };
 // Schedules (to be added in module.exports)

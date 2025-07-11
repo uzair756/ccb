@@ -2,7 +2,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { DSAUser,AdminPost,Department,PlayerNominationForm,createScheduleModel,BestCricketer,BestFootballPlayer,BestFutsalPlayer,BestBasketballPlayer,SportsCoachUser,CoordinatorUser,RepUser,RefUser,CaptainUser} = require('../models');
+const { DSAUser,AdminPost,Department,PlayerNominationForm,createScheduleModel,BestCricketer,BestFootballPlayer,BestFutsalPlayer,BestBasketballPlayer,SportsCoachUser,CoordinatorUser,RepUser,RefUser,CaptainUser,BestTennisPlayer,BestBadmintonFemalePlayer,BestBadmintonMalePlayer,BestTableTennisFemalePlayer,BestTableTennisMalePlayer,BestSnookerPlayer,TeamRankings,Pools} = require('../models');
 const authenticateJWT = require('../middleware');
 const config = require('../config');
 const upload = require('./multerConfig');
@@ -497,6 +497,24 @@ router.get('/admin/players', async (req, res) => {
       case 'Basketball':
         playersData = await BestBasketballPlayer.findOne({ year });
         break;
+      case 'Tennis':
+        playersData = await BestTennisPlayer.findOne({ year });
+        break;
+      case 'Table Tennis (M)':
+        playersData = await BestTableTennisMalePlayer.findOne({ year });
+        break;
+      case 'Table Tennis (F)':
+        playersData = await BestTableTennisFemalePlayer.findOne({ year });
+        break;
+      case 'Badminton (M)':
+        playersData = await BestBasketballPlayer.findOne({ year });
+        break;
+      case 'Badminton (F)':
+        playersData = await BestBasketballPlayer.findOne({ year });
+        break;
+        case 'Snooker':
+        playersData = await BestSnookerPlayer.findOne({ year });
+        break;
       default:
         return res.status(400).json({ 
           success: false, 
@@ -545,6 +563,24 @@ router.get('/admin/players/pdf', async (req, res) => {
       case 'Basketball':
         playersData = await BestBasketballPlayer.findOne({ year });
         break;
+        case 'Tennis':
+        playersData = await BestTennisPlayer.findOne({ year });
+        break;
+        case 'Table Tennis (M)':
+        playersData = await BestTableTennisMalePlayer.findOne({ year });
+        break;
+      case 'Table Tennis (F)':
+        playersData = await BestTableTennisFemalePlayer.findOne({ year });
+        break;
+      case 'Badminton (M)':
+        playersData = await BestBadmintonMalePlayer.findOne({ year });
+        break;
+      case 'Badminton (F)':
+        playersData = await BestBadmintonFemalePlayer.findOne({ year });
+        break;
+        case 'Snooker':
+        playersData = await BestSnookerPlayer.findOne({ year });
+        break;
       default:
         return res.status(400).json({ 
           success: false, 
@@ -581,7 +617,7 @@ router.get('/admin/players/pdf', async (req, res) => {
     // Table setup - add wickets column for cricket
     const headers = sport === 'Cricket' 
       ? ['Name', 'Reg No', 'Section', 'Runs', 'Wickets']
-      : ['Name', 'Reg No', 'Section', sport === 'Basketball' ? 'Points' : 'Goals'];
+      : ['Name', 'Reg No', 'Section', sport === 'Basketball' || sport === 'Table Tennis (M)' || sport === 'Table Tennis (F)' || sport === 'Badminton (M)' || sport === 'Badminton (F)' || sport === 'Snooker' || sport === 'Tennis'   ? 'Points' : 'Goals'];
     
     const rows = playersData.nominations.map(player => {
       if (sport === 'Cricket') {
@@ -592,7 +628,7 @@ router.get('/admin/players/pdf', async (req, res) => {
           player.totalrunsScored?.toString() || '0',
           player.totalwicketstaken?.toString() || '0'
         ];
-      } else if (sport === 'Basketball') {
+      } else if (sport === 'Basketball' || sport === 'Table Tennis (M)' || sport === 'Table Tennis (F)' || sport === 'Badminton (M)' || sport === 'Badminton (F)' || sport === 'Snooker' || sport === 'Tennis' ) {
         return [
           player.name || '-',
           player.regNo || '-',
@@ -728,6 +764,234 @@ router.delete('/dsa/deleteuser/:role/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Check if rankings exist
+router.get('/check-rankings', authenticateJWT, async (req, res) => {
+  const { sport, year } = req.query;
+  
+  try {
+    const existingRanking = await TeamRankings.findOne({ 
+      category: sport, 
+      year 
+    });
+    
+    if (existingRanking) {
+      return res.json({ 
+        exists: true, 
+        message: 'Rankings already exist for this sport and year' 
+      });
+    }
+    
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('Error checking rankings:', error);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// Get existing rankings
+router.get('/get-rankings', authenticateJWT, async (req, res) => {
+  const { sport, year } = req.query;
+  
+  try {
+    const rankings = await TeamRankings.findOne({ 
+      category: sport, 
+      year 
+    });
+    
+    if (!rankings) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Rankings not found' 
+      });
+    }
+    
+    res.json({ success: true, rankings });
+  } catch (error) {
+    console.error('Error fetching rankings:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching rankings' 
+    });
+  }
+});
+
+// Generate rankings - Updated to include playoff losing teams
+router.post('/generate-rankings', authenticateJWT, async (req, res) => {
+  const { sport, year } = req.body;
+  
+  try {
+    // 1. Check if final exists and has result
+    const ScheduleModel = createScheduleModel(sport);
+    const finalMatch = await ScheduleModel.findOne({ 
+      sport, 
+      year, 
+      pool: 'final',
+      result: { $exists: true, $ne: null }
+    });
+    
+    if (!finalMatch) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot generate rankings - final match not completed yet' 
+      });
+    }
+    
+    // 2. Get pools data
+    const pools = await Pools.findOne({ sport, year });
+    if (!pools) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Cannot generate rankings - pools not found' 
+      });
+    }
+    
+    // 3. Resolve TBD teams and get playoff results
+    const resolveTBD = async (team) => {
+      if (team !== 'TBD') return team;
+      const playoffMatch = await ScheduleModel.findOne({
+        sport, year, pool: 'play-off', 
+        result: { $exists: true, $ne: null }
+      });
+      if (!playoffMatch) {
+        throw new Error('Cannot resolve TBD team - play-off match not completed');
+      }
+      return playoffMatch.result;
+    };
+    
+    const resolvedPoolA = await Promise.all(pools.poolA.map(resolveTBD));
+    const resolvedPoolB = await Promise.all(pools.poolB.map(resolveTBD));
+    
+    // Get playoff loser (if exists)
+    const playoffMatch = await ScheduleModel.findOne({
+      sport, year, pool: 'play-off',
+      result: { $exists: true, $ne: null }
+    });
+    const playoffLoser = playoffMatch ? 
+      (playoffMatch.result === playoffMatch.team1 ? playoffMatch.team2 : playoffMatch.team1) : 
+      null;
+    
+    // 4. Get all pool matches (Pool A and Pool B)
+    const poolMatches = await ScheduleModel.find({
+      sport,
+      year,
+      pool: { $in: ['A', 'B'] },
+      result: { $exists: true, $ne: null }
+    });
+    
+    // 5. Calculate team stats for all teams (including playoff loser)
+    const teamStats = {};
+    let allTeams = [...new Set([...resolvedPoolA, ...resolvedPoolB].filter(team => team !== 'TBD'))];
+    
+    // Add playoff loser if not already in teams
+    if (playoffLoser && !allTeams.includes(playoffLoser)) {
+      allTeams.push(playoffLoser);
+    }
+    
+    allTeams.forEach(team => {
+      teamStats[team] = { 
+        wins: 0, 
+        matches: 0,
+        pointsFor: 0,
+        pointsAgainst: 0
+      };
+    });
+    
+    // Process pool matches
+    poolMatches.forEach(match => {
+      if (match.result && teamStats[match.result]) {
+        teamStats[match.result].wins++;
+      }
+      
+      if (teamStats[match.team1]) {
+        teamStats[match.team1].matches++;
+        teamStats[match.team1].pointsFor += match.scoreT1 || 0;
+        teamStats[match.team1].pointsAgainst += match.scoreT2 || 0;
+      }
+      
+      if (teamStats[match.team2]) {
+        teamStats[match.team2].matches++;
+        teamStats[match.team2].pointsFor += match.scoreT2 || 0;
+        teamStats[match.team2].pointsAgainst += match.scoreT1 || 0;
+      }
+    });
+    
+    // 6. Get knockout stage results
+    const semiMatches = await ScheduleModel.find({
+      sport,
+      year,
+      pool: 'semi',
+      result: { $exists: true, $ne: null }
+    });
+    
+    const semiLosers = semiMatches.map(match => 
+      match.result === match.team1 ? match.team2 : match.team1
+    );
+    
+    // 7. Determine rankings
+    const rankings = {
+      category: sport,
+      year,
+      P1: finalMatch.result,
+      P2: finalMatch.result === finalMatch.team1 ? finalMatch.team2 : finalMatch.team1
+    };
+    
+    // Add semi-final losers (3rd and 4th)
+    if (semiLosers.length >= 2) {
+      rankings.P3 = semiLosers[0];
+      rankings.P4 = semiLosers[1];
+    }
+    
+    // Rank remaining teams (including playoff loser if not already in top 4)
+    const remainingTeams = allTeams.filter(team => 
+      !Object.values(rankings).includes(team)
+    );
+    
+    remainingTeams.sort((a, b) => {
+      // Primary sort by wins
+      if (teamStats[b].wins !== teamStats[a].wins) {
+        return teamStats[b].wins - teamStats[a].wins;
+      }
+      
+      // Secondary sort by head-to-head
+      const headToHead = poolMatches.find(m => 
+        (m.team1 === a && m.team2 === b) || 
+        (m.team1 === b && m.team2 === a)
+      );
+      
+      if (headToHead?.result) {
+        return headToHead.result === b ? 1 : -1;
+      }
+      
+      // Tertiary sort by point difference
+      const diffA = teamStats[a].pointsFor - teamStats[a].pointsAgainst;
+      const diffB = teamStats[b].pointsFor - teamStats[b].pointsAgainst;
+      return diffB - diffA;
+    });
+    
+    // Add remaining teams to rankings dynamically (starting from P5)
+    remainingTeams.forEach((team, index) => {
+      rankings[`P${index + 5}`] = team;
+    });
+    
+    // 8. Save to database
+    const newRanking = new TeamRankings(rankings);
+    await newRanking.save();
+    
+    res.json({ 
+      success: true, 
+      message: 'Rankings generated successfully',
+      rankings
+    });
+    
+  } catch (error) {
+    console.error('Error generating rankings:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Error generating rankings'
+    });
   }
 });
 
